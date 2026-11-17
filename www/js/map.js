@@ -63,9 +63,10 @@ function drawFogOfWar() {
   fogCanvas.style.height = `${layerSize.y}px`;
   fogContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   fogContext.globalCompositeOperation = "source-over";
-  fogContext.fillStyle = "rgba(103, 103, 103, 0.85)";
+  fogContext.fillStyle = "rgba(8, 20, 27, 0.9)";
   fogContext.fillRect(0, 0, size.x, size.y);
   fogContext.globalCompositeOperation = "destination-out";
+  fogContext.shadowColor = "rgba(255, 255, 255, 0.55)";
 
   discoveredFogAreas.forEach((area) => {
     const endpointCoordinates = getAreaEndpoints(area);
@@ -85,6 +86,7 @@ function drawFogOfWar() {
       );
 
     fogContext.beginPath();
+    fogContext.shadowBlur = Math.min(18, Math.max(4, radiusInPixels * 0.2));
     if (endpoints.length === 1) {
       fogContext.arc(
         endpoints[0].x,
@@ -103,6 +105,7 @@ function drawFogOfWar() {
     }
     fogContext.fill();
   });
+  fogContext.shadowBlur = 0;
   fogContext.globalCompositeOperation = "source-over";
 
   discoveredAreaLayers.forEach((layer) => layer.bringToFront());
@@ -123,6 +126,53 @@ window.clearDiscoveredAreas = () => {
   discoveredAreaLayers.length = 0;
   discoveredFogAreas.length = 0;
   drawFogOfWar();
+};
+
+window.updateLocationAvatar = (coordinates, avatar, accuracy) => {
+  if (Number.isFinite(accuracy)) {
+    if (!window.locationAccuracyCircle) {
+      window.locationAccuracyCircle = L.circle(coordinates, {
+        radius: accuracy,
+        color: "#8edbef",
+        weight: 1,
+        fillColor: "#8edbef",
+        fillOpacity: 0.12,
+        interactive: false,
+      }).addTo(map);
+    } else {
+      window.locationAccuracyCircle.setLatLng(coordinates);
+      window.locationAccuracyCircle.setRadius(accuracy);
+    }
+  }
+  if (!window.locationAvatar) {
+    window.locationAvatar = L.marker(coordinates, {
+      icon: L.divIcon({
+        className: "location-avatar",
+        html: `<span aria-label="${avatar.label}">${avatar.svg}</span>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      }),
+    }).addTo(map);
+    return;
+  }
+  window.locationAvatar.setLatLng(coordinates);
+  window.locationAvatar.setIcon(L.divIcon({
+    className: "location-avatar",
+    html: `<span aria-label="${avatar.label}">${avatar.svg}</span>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  }));
+};
+
+window.clearLocationAvatar = () => {
+  if (window.locationAvatar) {
+    map.removeLayer(window.locationAvatar);
+    window.locationAvatar = null;
+  }
+  if (window.locationAccuracyCircle) {
+    map.removeLayer(window.locationAccuracyCircle);
+    window.locationAccuracyCircle = null;
+  }
 };
 
 map.on("move zoom resize", drawFogOfWar);

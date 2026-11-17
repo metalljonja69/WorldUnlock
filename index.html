@@ -1,75 +1,178 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WorldUnlock</title>
-  <meta name="theme-color" content="#101820">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-</head>
-<body>
-  <main class="page">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">Deine Weltreise</p>
-        <h1>WorldUnlock</h1>
-      </div>
-      <button id="menu-button" class="menu-button" type="button"
-        aria-label="Menü öffnen" aria-controls="side-menu" aria-expanded="false">☰</button>
-    </header>
-    <section class="exploration-panel" aria-label="Erkundung">
-      <div class="gps-controls">
-        <button id="start-button" type="button">Erkundung starten</button>
-        <button id="stop-button" type="button" disabled>Erkundung beenden</button>
-      </div>
-      <p id="gps-status" role="status">GPS ist nicht aktiv.</p>
-    </section>
-    <div id="map" aria-label="Interaktive Weltkarte"></div>
-  </main>
-  <aside id="side-menu" class="side-menu" aria-label="Hauptmenü" aria-hidden="true">
-    <div class="side-menu-header">
-      <h2>Menü</h2>
-      <button id="close-menu-button" class="close-button" type="button"
-        aria-label="Menü schließen">×</button>
-    </div>
-    <section class="menu-section" aria-labelledby="progress-heading">
-      <h3 id="progress-heading">Fortschritt &amp; Erfolge</h3>
-      <div class="statistics" aria-label="Entdeckungsstatistik">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WorldUnlock</title>
+    <meta name="theme-color" content="#101820" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="app-header">
         <div>
-          <strong id="distance-count">0 m</strong>
-          <span>Zurückgelegte Distanz</span>
+          <h1>WorldUnlock</h1>
         </div>
+        <button
+          id="menu-button"
+          class="menu-button"
+          type="button"
+          aria-label="Menü öffnen"
+          aria-controls="side-menu"
+          aria-expanded="false"
+        >
+          ☰
+        </button>
+      </header>
+      <section class="exploration-panel" aria-label="Erkundung">
+        <div class="travel-mode-control">
+          <span class="control-label">Unterwegs mit</span>
+          <div
+            class="travel-mode-buttons"
+            role="group"
+            aria-label="Fortbewegungsart"
+          >
+            <button
+              class="mode-button is-selected"
+              type="button"
+              data-mode="walking"
+              aria-label="Zu Fuss, Messung alle 10 Sekunden"
+              aria-pressed="true"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="13" cy="4" r="2" />
+                <path d="m11 8 3 2 2 4m-5-6-2 5 3 2-1 6m3-8 4 2m-5-5-4-1-2 3" />
+              </svg>
+            </button>
+            <button
+              class="mode-button"
+              type="button"
+              data-mode="vehicle"
+              aria-label="Gefährt, Messung alle 2 Sekunden"
+              aria-pressed="false"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5 17h14l-1-6H6l-1 6Zm2 0v2m10-2v2M7 11l1-4h8l1 4M4 14h2m12 0h2"
+                />
+                <circle cx="8" cy="18" r="1" />
+                <circle cx="16" cy="18" r="1" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="gps-controls">
+          <button id="start-button" type="button">Starten</button>
+          <button id="stop-button" type="button" disabled>Stoppen</button>
+        </div>
+        <p id="gps-status" class="gps-status" role="status">Bereit</p>
+        <div class="tracking-details" aria-live="polite">
+          <div>
+            <span>Position</span><strong id="current-position">-</strong>
+          </div>
+          <div>
+            <span>Genauigkeit</span><strong id="gps-accuracy">-</strong>
+          </div>
+          <div>
+            <span>Tourdauer</span><strong id="tour-duration">00:00</strong>
+          </div>
+        </div>
+      </section>
+      <div id="map" aria-label="Interaktive Weltkarte"></div>
+    </main>
+    <aside
+      id="side-menu"
+      class="side-menu"
+      aria-label="Hauptmenü"
+      aria-hidden="true"
+    >
+      <div class="side-menu-header">
+        <h2>Menü</h2>
+        <button
+          id="close-menu-button"
+          class="close-button"
+          type="button"
+          aria-label="Menü schließen"
+        >
+          ×
+        </button>
       </div>
-    </section>
-    <section class="menu-section country-section" aria-labelledby="countries-heading">
-      <h3 id="countries-heading">Besuchte Länder</h3>
-      <p id="countries-empty">Noch kein Land besucht.</p>
-      <label for="country-select">Land auswählen</label>
-      <select id="country-select" disabled>
-        <option value="">Noch kein Land verfügbar</option>
-      </select>
-      <p id="country-progress" class="country-progress">0 % freigeschaltet</p>
-    </section>
-    <section class="menu-section future-section" aria-labelledby="future-heading">
-      <h3 id="future-heading">Weitere Menüs</h3>
-      <p>Hier können später neue Bereiche wie Einstellungen und Reiseziele ergänzt werden.</p>
-    </section>
-    <section class="menu-section" aria-labelledby="data-heading">
-      <h3 id="data-heading">Daten</h3>
-      <button id="clear-data-button" class="danger-button" type="button">
-        Alle gespeicherten Daten löschen
-      </button>
-    </section>
-  </aside>
-  <div id="menu-backdrop" class="menu-backdrop" hidden></div>
-  <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="js/map.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/gps.js"></script>
-  <script src="js/app.js"></script>
-</body>
+      <section class="menu-section" aria-labelledby="progress-heading">
+        <h3 id="progress-heading">Fortschritt &amp; Erfolge</h3>
+        <div class="statistics" aria-label="Entdeckungsstatistik">
+          <div>
+            <strong id="distance-count">0 m</strong>
+            <span>Zurückgelegte Distanz</span>
+          </div>
+          <div>
+            <strong id="area-count">0</strong>
+            <span>Entdeckte Gebiete</span>
+          </div>
+          <div>
+            <strong id="country-count">0</strong>
+            <span>Besuchte Länder</span>
+          </div>
+          <div>
+            <strong id="level-count">1</strong>
+            <span>Level</span>
+          </div>
+        </div>
+        <div class="level-progress">
+          <div class="level-progress-heading">
+            <span id="xp-count">0 XP</span>
+            <span id="next-level-xp">100 XP</span>
+          </div>
+          <div class="progress-track" aria-label="Level-Fortschritt">
+            <span id="level-progress-bar"></span>
+          </div>
+        </div>
+        <div class="achievement-list">
+          <h4>Achievements</h4>
+          <ul id="achievement-list">
+            <li>Noch keine Gemeinde erfasst.</li>
+          </ul>
+        </div>
+      </section>
+      <section class="menu-section" aria-labelledby="avatar-heading">
+        <h3 id="avatar-heading">Dein Avatar</h3>
+        <div
+          id="avatar-grid"
+          class="avatar-grid"
+          aria-label="Avatare auswählen"
+        ></div>
+        <p id="avatar-progress"></p>
+      </section>
+      <section
+        class="menu-section country-section"
+        aria-labelledby="countries-heading"
+      >
+        <h3 id="countries-heading">Besuchte Länder</h3>
+        <p id="countries-empty">Noch kein Land besucht.</p>
+        <label for="country-select">Land auswählen</label>
+        <select id="country-select" disabled>
+          <option value="">Noch kein Land verfügbar</option>
+        </select>
+        <p id="country-progress" class="country-progress">0 % freigeschaltet</p>
+        <div class="progress-track" aria-hidden="true">
+          <span id="country-progress-bar"></span>
+        </div>
+      </section>
+      <section class="menu-section" aria-labelledby="data-heading">
+        <h3 id="data-heading">Daten</h3>
+        <button id="clear-data-button" class="danger-button" type="button">
+          Alle gespeicherten Daten löschen
+        </button>
+      </section>
+    </aside>
+    <div id="menu-backdrop" class="menu-backdrop" hidden></div>
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/services/exploration-engine.js"></script>
+    <script src="js/services/gps-service.js"></script>
+    <script src="js/gps.js"></script>
+    <script src="js/app.js"></script>
+  </body>
 </html>
-
-

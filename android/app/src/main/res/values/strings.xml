@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WorldUnlock</string>
+    <string name="title_activity_main">WorldUnlock</string>
+    <string name="package_name">com.worldunlock.app</string>
+    <string name="custom_url_scheme">com.worldunlock.app</string>
+</resources>

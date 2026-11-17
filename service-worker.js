@@ -1,4 +1,4 @@
-const cacheName = 'worldunlocked-v5';
+const cacheName = 'worldunlocked-v6';
 const localFiles = [
   './',
   './index.html',
@@ -8,6 +8,8 @@ const localFiles = [
   './js/gps.js',
   './js/map.js',
   './js/storage.js',
+  './js/services/exploration-engine.js',
+  './js/services/gps-service.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/images/layers.png',

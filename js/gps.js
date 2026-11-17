@@ -2,17 +2,37 @@ const startButton = document.querySelector("#start-button");
 const stopButton = document.querySelector("#stop-button");
 const gpsStatus = document.querySelector("#gps-status");
 const distanceCount = document.querySelector("#distance-count");
+const areaCount = document.querySelector("#area-count");
+const countryCount = document.querySelector("#country-count");
+const levelCount = document.querySelector("#level-count");
+const xpCount = document.querySelector("#xp-count");
+const nextLevelXp = document.querySelector("#next-level-xp");
+const levelProgressBar = document.querySelector("#level-progress-bar");
+const currentPosition = document.querySelector("#current-position");
+const gpsAccuracy = document.querySelector("#gps-accuracy");
+const tourDuration = document.querySelector("#tour-duration");
+const countryProgressBar = document.querySelector("#country-progress-bar");
 const countriesEmpty = document.querySelector("#countries-empty");
 const countrySelect = document.querySelector("#country-select");
 const countryProgress = document.querySelector("#country-progress");
+const travelModeButtons = document.querySelectorAll(".mode-button");
+const achievementList = document.querySelector("#achievement-list");
+const avatarGrid = document.querySelector("#avatar-grid");
+const avatarProgress = document.querySelector("#avatar-progress");
 
-let sampleTimerId = null;
-let backgroundWatcherId = null;
+let gpsService = null;
 let locationMarker = null;
 let lastPosition = null;
 let lastSampleTime = null;
-const discoveryRadius = 50;
-const sampleInterval = 15000;
+let travelMode = "walking";
+let tourStartedAt = null;
+let tourTimerId = null;
+let centerOnNextLocation = false;
+const discoveryRadius = 40;
+const sampleIntervals = {
+  walking: 10000,
+  vehicle: 2000,
+};
 
 function formatDistance(distance) {
   if (distance >= 1000) {
@@ -25,6 +45,12 @@ function formatDistance(distance) {
 function updateStatistics() {
   const statistics = window.getStatistics();
   distanceCount.textContent = formatDistance(statistics.distance);
+  areaCount.textContent = String(statistics.areaCount);
+  countryCount.textContent = String(statistics.countryCount);
+  levelCount.textContent = String(statistics.exploration.level);
+  xpCount.textContent = `${statistics.exploration.xp} XP`;
+  nextLevelXp.textContent = `${statistics.exploration.nextLevelXp} XP`;
+  levelProgressBar.style.width = `${statistics.exploration.percentage}%`;
   countriesEmpty.hidden = statistics.countries.length > 0;
   const selectedCountry = countrySelect.value;
   countrySelect.replaceChildren(
@@ -40,6 +66,8 @@ function updateStatistics() {
     countrySelect.value = selectedCountry;
   }
   updateCountryProgress();
+  updateAchievements();
+  updateAvatarOptions();
 }
 
 function updateCountryProgress() {
@@ -49,10 +77,70 @@ function updateCountryProgress() {
   countryProgress.textContent = selectedCountry
     ? `${selectedCountry.percentage.toFixed(2)} % freigeschaltet`
     : "0 % freigeschaltet";
+  countryProgressBar.style.width = `${selectedCountry ? selectedCountry.percentage : 0}%`;
+}
+
+function updateAchievements() {
+  const municipalities = window.getStatistics().municipalities;
+  achievementList.replaceChildren(
+    ...(municipalities.length
+      ? municipalities.map((municipality) => {
+          const item = document.createElement("li");
+          item.textContent = `${municipality.name}: ${municipality.percentage.toFixed(2)} % erfasst`;
+          return item;
+        })
+      : [Object.assign(document.createElement("li"), {
+          textContent: "Noch keine Gemeinde erfasst.",
+        })]),
+  );
+}
+
+function updateAvatarOptions() {
+  const definitions = window.getAvatarDefinitions();
+  const selectedAvatar = window.getSelectedAvatar();
+  avatarGrid.replaceChildren(
+    ...definitions.map((avatar) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "avatar-choice";
+      button.disabled = !avatar.unlocked;
+      button.dataset.avatarId = avatar.id;
+      button.setAttribute("aria-label", avatar.unlocked ? avatar.label : `${avatar.label}, gesperrt`);
+      button.setAttribute("aria-pressed", String(avatar.id === selectedAvatar.id));
+      button.innerHTML = `${avatar.svg}<span>${avatar.label}</span>`;
+      return button;
+    }),
+  );
+  const travelledDistance = window.getStatistics().distance;
+  avatarProgress.textContent = definitions
+    .filter((avatar) => !avatar.unlocked)
+    .map((avatar) => `${avatar.label}: ${formatDistance(Math.max(0, avatar.requiredDistance - travelledDistance))}`)
+    .join(" · ") || "Alle Avatare freigeschaltet.";
+  if (locationMarker) {
+    window.updateLocationAvatar(locationMarker.getLatLng(), selectedAvatar);
+  }
 }
 
 function setStatus(message) {
   gpsStatus.textContent = message;
+}
+
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(
+    seconds % 60,
+  ).padStart(2, "0")}`;
+}
+
+function updateTourDuration() {
+  tourDuration.textContent = tourStartedAt
+    ? formatDuration(Date.now() - tourStartedAt)
+    : "00:00";
+}
+
+function updatePositionDetails(position) {
+  currentPosition.textContent = `${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}`;
+  gpsAccuracy.textContent = `${Math.round(position.accuracy)} m`;
 }
 
 function calculateDistance(firstPosition, secondPosition) {
@@ -73,35 +161,6 @@ function calculateDistance(firstPosition, secondPosition) {
   return (
     earthRadius * 2 * Math.atan2(Math.sqrt(distance), Math.sqrt(1 - distance))
   );
-}
-
-function getBackgroundGeolocation() {
-  if (!window.Capacitor || !window.Capacitor.Plugins) {
-    return null;
-  }
-
-  return window.Capacitor.Plugins.BackgroundGeolocation || null;
-}
-
-function updateBackgroundLocation(location, error) {
-  if (error) {
-    console.error(error);
-    showLocationError({ code: error.code === "NOT_AUTHORIZED" ? 1 : 2 });
-    return;
-  }
-
-  if (!location) {
-    return;
-  }
-
-  updateLocation({
-    coords: {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      accuracy: location.accuracy,
-    },
-    timestamp: location.time,
-  });
 }
 
 function unlockArea(position, previousPosition) {
@@ -159,6 +218,7 @@ async function lookupCountry(position) {
       name: place.countryName,
       code: place.countryCode,
       area: countryArea,
+      municipality: place.locality || place.city || place.principalSubdivision,
     });
     window.addVisitedCountry(place.countryName);
     updateStatistics();
@@ -180,7 +240,8 @@ countrySelect.addEventListener("change", updateCountryProgress);
 
 function updateLocation(position) {
   if (position.coords.accuracy > 100) {
-    setStatus("GPS-Signal ist zu ungenau. Warte auf ein besseres Signal.");
+    setStatus("GPS-Signal ungenau");
+    gpsAccuracy.textContent = `${Math.round(position.coords.accuracy)} m`;
     return;
   }
 
@@ -192,9 +253,15 @@ function updateLocation(position) {
       : Date.now(),
   };
 
+  if (Number.isFinite(position.coords.speed) && position.coords.speed > 100) {
+    setStatus("Unplausible GPS-Geschwindigkeit ignoriert");
+    return;
+  }
+
   if (
     lastSampleTime !== null &&
-    currentPosition.timestamp - lastSampleTime < sampleInterval
+    currentPosition.timestamp - lastSampleTime <
+      sampleIntervals[travelMode]
   ) {
     return;
   }
@@ -208,8 +275,7 @@ function updateLocation(position) {
 
     if (
       timeInSeconds > 0 &&
-      distanceFromLastPosition > 1000 &&
-      timeInSeconds < 10
+      distanceFromLastPosition / timeInSeconds > 100
     ) {
       setStatus("Unrealistischer GPS-Sprung ignoriert.");
       return;
@@ -220,20 +286,32 @@ function updateLocation(position) {
   lastPosition = currentPosition;
   lastSampleTime = currentPosition.timestamp;
   const coordinates = [currentPosition.latitude, currentPosition.longitude];
+  updatePositionDetails({
+    latitude: currentPosition.latitude,
+    longitude: currentPosition.longitude,
+    accuracy: position.coords.accuracy,
+  });
 
+  const selectedAvatar = window.getSelectedAvatar();
   if (!locationMarker) {
-    locationMarker = L.circleMarker(coordinates, {
-      radius: 5,
-      color: "#2c2c2cec",
-      weight: 2,
-      fillColor: "#0df009ec",
-      fillOpacity: 1,
-    }).addTo(window.worldMap);
+    locationMarker = L.marker(coordinates);
   } else {
     locationMarker.setLatLng(coordinates);
   }
+  window.updateLocationAvatar(
+    coordinates,
+    selectedAvatar,
+    position.coords.accuracy,
+  );
 
   let areaWasUnlocked;
+  const explorationResult = window.explorationEngine.processLocation({
+    latitude: currentPosition.latitude,
+    longitude: currentPosition.longitude,
+    accuracy: position.coords.accuracy,
+    timestamp: currentPosition.timestamp,
+    speed: position.coords.speed ?? null,
+  });
 
   try {
     areaWasUnlocked = unlockArea(currentPosition, previousPosition);
@@ -247,12 +325,18 @@ function updateLocation(position) {
     return;
   }
 
-  window.worldMap.setView(coordinates, 16);
+  if (centerOnNextLocation) {
+    window.worldMap.setView(coordinates, 16);
+    centerOnNextLocation = false;
+  }
   const discoveryMessage = areaWasUnlocked
     ? " Neues Gebiet freigeschaltet."
     : "";
+  const xpMessage = explorationResult.status === "new"
+    ? ` +${explorationResult.xpAwarded} XP.`
+    : "";
   setStatus(
-    `GPS aktiv. Genauigkeit: ungefähr ${Math.round(position.coords.accuracy)} m.${discoveryMessage}`,
+    `GPS verbunden · Tour läuft${discoveryMessage}${xpMessage}`,
   );
 }
 
@@ -263,93 +347,59 @@ function showLocationError(error) {
     3: "Die GPS-Anfrage hat zu lange gedauert.",
   };
 
-  setStatus(errorMessages[error.code] || "Unbekannter GPS-Fehler.");
+  setStatus(errorMessages[error.code] || "GPS-Fehler");
 }
 
 function startTracking() {
-  if (!navigator.geolocation) {
-    setStatus("Dieser Browser unterstützt keine Standortbestimmung.");
+  if (!gpsService) {
+    gpsService = new window.GpsService({
+      onLocation: updateLocation,
+      onError: showLocationError,
+    });
+  }
+  if (gpsService.isActive()) {
     return;
   }
 
-  if (sampleTimerId !== null || backgroundWatcherId !== null) {
-    return;
-  }
-
-  setStatus("GPS wird gestartet ...");
-
-  const backgroundGeolocation = getBackgroundGeolocation();
-
-  if (backgroundGeolocation) {
-    backgroundGeolocation
-      .addWatcher(
-        {
-          backgroundMessage: "WorldUnlock zeichnet deinen Weg auf.",
-          backgroundTitle: "WorldUnlock verwendet deinen Standort",
-          requestPermissions: true,
-          stale: false,
-          distanceFilter: 0,
-        },
-        updateBackgroundLocation,
-      )
-      .then((watcherId) => {
-        backgroundWatcherId = watcherId;
-        startButton.disabled = true;
-        stopButton.disabled = false;
-        setStatus("GPS aktiv. Hintergrundaufzeichnung ist eingeschaltet.");
-      })
-      .catch((error) => {
-        console.error(error);
-        setStatus("Hintergrund-GPS konnte nicht gestartet werden.");
-      });
-    return;
-  }
-
-  const locationOptions = {
-    enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 10000,
-  };
-  const requestLocation = () =>
-    navigator.geolocation.getCurrentPosition(
-      updateLocation,
-      showLocationError,
-      locationOptions,
-    );
-
-  requestLocation();
-  sampleTimerId = window.setInterval(requestLocation, sampleInterval);
+  setStatus("GPS wird gesucht");
+  tourStartedAt = Date.now();
+  centerOnNextLocation = true;
+  updateTourDuration();
+  tourTimerId = window.setInterval(updateTourDuration, 1000);
   startButton.disabled = true;
   stopButton.disabled = false;
+  gpsService
+    .start(sampleIntervals[travelMode])
+    .catch((error) => {
+      console.error(error);
+      stopTracking();
+      setStatus(error.message || "GPS konnte nicht gestartet werden");
+    });
 }
 
-function stopTracking() {
-  if (sampleTimerId === null && backgroundWatcherId === null) {
+async function stopTracking() {
+  if (!gpsService || !gpsService.isActive()) {
+    setStatus("Tour wurde gestoppt");
     return;
   }
 
-  const backgroundGeolocation = getBackgroundGeolocation();
-
-  if (backgroundWatcherId !== null && backgroundGeolocation) {
-    backgroundGeolocation
-      .removeWatcher({ id: backgroundWatcherId })
-      .catch((error) => {
-        console.error(error);
-        setStatus("Hintergrund-GPS konnte nicht beendet werden.");
-      });
-    backgroundWatcherId = null;
+  try {
+    await gpsService.stop();
+  } catch (error) {
+    console.error(error);
+    setStatus("GPS konnte nicht beendet werden");
   }
 
-  if (sampleTimerId !== null) {
-    window.clearInterval(sampleTimerId);
+  if (tourTimerId !== null) {
+    window.clearInterval(tourTimerId);
   }
-
-  sampleTimerId = null;
+  tourTimerId = null;
+  tourStartedAt = null;
   lastPosition = null;
   lastSampleTime = null;
   startButton.disabled = false;
   stopButton.disabled = true;
-  setStatus("GPS ist nicht aktiv.");
+  setStatus("Tour wurde gestoppt");
 }
 
 function clearLocationMarker() {
@@ -357,7 +407,37 @@ function clearLocationMarker() {
     window.worldMap.removeLayer(locationMarker);
     locationMarker = null;
   }
+  window.clearLocationAvatar();
 }
+
+travelModeButtons.forEach((button) => button.addEventListener("click", () => {
+  travelMode = button.dataset.mode;
+  travelModeButtons.forEach((modeButton) => {
+    const isSelected = modeButton === button;
+    modeButton.classList.toggle("is-selected", isSelected);
+    modeButton.setAttribute("aria-pressed", String(isSelected));
+  });
+  if (gpsService && gpsService.isActive()) {
+    stopTracking().then(startTracking);
+    return;
+  }
+  setStatus(
+    `Bereit · Messung alle ${sampleIntervals[travelMode] / 1000} Sekunden`,
+  );
+}));
+avatarGrid.addEventListener("click", (event) => {
+  const avatarButton = event.target.closest(".avatar-choice");
+  if (!avatarButton) {
+    return;
+  }
+  try {
+    window.setSelectedAvatar(avatarButton.dataset.avatarId);
+    updateAvatarOptions();
+  } catch (error) {
+    console.error(error);
+    setStatus("Dieser Avatar ist noch nicht freigeschaltet.");
+  }
+});
 
 startButton.addEventListener("click", startTracking);
 stopButton.addEventListener("click", stopTracking);
@@ -366,8 +446,10 @@ window.stopTracking = stopTracking;
 window.clearLocationMarker = clearLocationMarker;
 
 try {
+  window.explorationEngine.load();
   window.loadDiscoveredAreas();
   updateStatistics();
+  setStatus("Bereit");
   enrichExistingAreas();
 } catch (error) {
   console.error(error);
