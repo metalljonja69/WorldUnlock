@@ -6,12 +6,13 @@ const countriesEmpty = document.querySelector("#countries-empty");
 const countrySelect = document.querySelector("#country-select");
 const countryProgress = document.querySelector("#country-progress");
 
-let watchId = null;
+let sampleTimerId = null;
 let backgroundWatcherId = null;
 let locationMarker = null;
 let lastPosition = null;
-let lastDiscoveryPosition = null;
-const discoveryRadius = 100;
+let lastSampleTime = null;
+const discoveryRadius = 50;
+const sampleInterval = 15000;
 
 function formatDistance(distance) {
   if (distance >= 1000) {
@@ -103,20 +104,18 @@ function updateBackgroundLocation(location, error) {
   });
 }
 
-function unlockArea(position) {
-  if (
-    lastDiscoveryPosition &&
-    calculateDistance(lastDiscoveryPosition, position) < discoveryRadius
-  ) {
-    return false;
-  }
-
+function unlockArea(position, previousPosition) {
   const areaWasSaved = window.saveDiscoveredArea({
     latitude: position.latitude,
     longitude: position.longitude,
     radius: discoveryRadius,
+    ...(previousPosition
+      ? {
+          startLatitude: previousPosition.latitude,
+          startLongitude: previousPosition.longitude,
+        }
+      : {}),
   });
-  lastDiscoveryPosition = position;
   if (areaWasSaved) {
     lookupCountry(position);
   }
@@ -144,7 +143,9 @@ async function lookupCountry(position) {
     );
 
     if (!countryResponse.ok) {
-      throw new Error(`Länderfläche konnte nicht geladen werden: ${countryResponse.status}`);
+      throw new Error(
+        `Länderfläche konnte nicht geladen werden: ${countryResponse.status}`,
+      );
     }
 
     const countryData = await countryResponse.json();
@@ -186,8 +187,17 @@ function updateLocation(position) {
   const currentPosition = {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
-    timestamp: position.timestamp,
+    timestamp: Number.isFinite(position.timestamp)
+      ? position.timestamp
+      : Date.now(),
   };
+
+  if (
+    lastSampleTime !== null &&
+    currentPosition.timestamp - lastSampleTime < sampleInterval
+  ) {
+    return;
+  }
 
   let distanceFromLastPosition = 0;
 
@@ -206,15 +216,17 @@ function updateLocation(position) {
     }
   }
 
+  const previousPosition = lastPosition;
   lastPosition = currentPosition;
+  lastSampleTime = currentPosition.timestamp;
   const coordinates = [currentPosition.latitude, currentPosition.longitude];
 
   if (!locationMarker) {
     locationMarker = L.circleMarker(coordinates, {
-      radius: 8,
-      color: "#0984f0ec",
+      radius: 5,
+      color: "#2c2c2cec",
       weight: 2,
-      fillColor: "#0984f0ec",
+      fillColor: "#0df009ec",
       fillOpacity: 1,
     }).addTo(window.worldMap);
   } else {
@@ -224,7 +236,7 @@ function updateLocation(position) {
   let areaWasUnlocked;
 
   try {
-    areaWasUnlocked = unlockArea(currentPosition);
+    areaWasUnlocked = unlockArea(currentPosition, previousPosition);
     if (distanceFromLastPosition > 0) {
       window.addTravelledDistance(distanceFromLastPosition);
     }
@@ -260,7 +272,7 @@ function startTracking() {
     return;
   }
 
-  if (watchId !== null || backgroundWatcherId !== null) {
+  if (sampleTimerId !== null || backgroundWatcherId !== null) {
     return;
   }
 
@@ -276,7 +288,7 @@ function startTracking() {
           backgroundTitle: "WorldUnlock verwendet deinen Standort",
           requestPermissions: true,
           stale: false,
-          distanceFilter: 25,
+          distanceFilter: 0,
         },
         updateBackgroundLocation,
       )
@@ -293,21 +305,26 @@ function startTracking() {
     return;
   }
 
-  watchId = navigator.geolocation.watchPosition(
-    updateLocation,
-    showLocationError,
-    {
-      enableHighAccuracy: true,
-      maximumAge: 10000,
-      timeout: 10000,
-    },
-  );
+  const locationOptions = {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 10000,
+  };
+  const requestLocation = () =>
+    navigator.geolocation.getCurrentPosition(
+      updateLocation,
+      showLocationError,
+      locationOptions,
+    );
+
+  requestLocation();
+  sampleTimerId = window.setInterval(requestLocation, sampleInterval);
   startButton.disabled = true;
   stopButton.disabled = false;
 }
 
 function stopTracking() {
-  if (watchId === null && backgroundWatcherId === null) {
+  if (sampleTimerId === null && backgroundWatcherId === null) {
     return;
   }
 
@@ -323,19 +340,30 @@ function stopTracking() {
     backgroundWatcherId = null;
   }
 
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
+  if (sampleTimerId !== null) {
+    window.clearInterval(sampleTimerId);
   }
 
-  watchId = null;
+  sampleTimerId = null;
   lastPosition = null;
+  lastSampleTime = null;
   startButton.disabled = false;
   stopButton.disabled = true;
   setStatus("GPS ist nicht aktiv.");
 }
 
+function clearLocationMarker() {
+  if (locationMarker) {
+    window.worldMap.removeLayer(locationMarker);
+    locationMarker = null;
+  }
+}
+
 startButton.addEventListener("click", startTracking);
 stopButton.addEventListener("click", stopTracking);
+window.updateStatistics = updateStatistics;
+window.stopTracking = stopTracking;
+window.clearLocationMarker = clearLocationMarker;
 
 try {
   window.loadDiscoveredAreas();

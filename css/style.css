@@ -62,6 +62,12 @@ button:disabled {
   opacity: 0.5;
 }
 
+.danger-button {
+  width: 100%;
+  color: #fff;
+  background-color: #b83b4b;
+}
+
 .app-header {
   display: flex;
   align-items: center;

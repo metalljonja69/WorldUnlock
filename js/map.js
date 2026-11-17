@@ -14,15 +14,17 @@ const map = L.map("map", {
 });
 map.fitBounds(switzerlandBounds);
 window.worldMap = map;
-const fogBoundary = [
-  [-90, -180],
-  [-90, 180],
-  [90, 180],
-  [90, -180],
-];
 const discoveredFogAreas = [];
 const discoveredAreaLayers = [];
-let fogLayer = null;
+const fogCanvas = document.createElement("canvas");
+const fogContext = fogCanvas.getContext("2d");
+const fogPane = map.getPanes().overlayPane;
+fogCanvas.className = "fog-canvas";
+fogCanvas.style.position = "absolute";
+fogCanvas.style.left = "0";
+fogCanvas.style.top = "0";
+fogCanvas.style.pointerEvents = "none";
+fogPane.appendChild(fogCanvas);
 
 L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
@@ -33,35 +35,75 @@ L.tileLayer(
   },
 ).addTo(map);
 
-function createCirclePoints(area) {
-  const points = [];
-  const latitudeRadius = area.radius / 111320;
-  const longitudeRadius =
-    area.radius / (111320 * Math.cos((area.latitude * Math.PI) / 180));
-
-  for (let index = 0; index < 64; index += 1) {
-    const angle = (index / 64) * Math.PI * 2;
-    points.push([
-      area.latitude + Math.sin(angle) * latitudeRadius,
-      area.longitude + Math.cos(angle) * longitudeRadius,
-    ]);
+function getAreaEndpoints(area) {
+  if (
+    Number.isFinite(area.startLatitude) &&
+    Number.isFinite(area.startLongitude)
+  ) {
+    return [
+      [area.startLatitude, area.startLongitude],
+      [area.latitude, area.longitude],
+    ];
   }
 
-  return points;
+  return [[area.latitude, area.longitude]];
 }
 
 function drawFogOfWar() {
-  if (fogLayer) {
-    map.removeLayer(fogLayer);
-  }
+  const size = map.getSize();
+  const layerOrigin = map.containerPointToLayerPoint(L.point(0, 0));
+  const layerEnd = map.containerPointToLayerPoint(L.point(size.x, size.y));
+  const layerSize = layerEnd.subtract(layerOrigin);
+  const pixelRatio = window.devicePixelRatio || 1;
+  fogCanvas.width = layerSize.x * pixelRatio;
+  fogCanvas.height = layerSize.y * pixelRatio;
+  fogCanvas.style.left = `${layerOrigin.x}px`;
+  fogCanvas.style.top = `${layerOrigin.y}px`;
+  fogCanvas.style.width = `${layerSize.x}px`;
+  fogCanvas.style.height = `${layerSize.y}px`;
+  fogContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  fogContext.globalCompositeOperation = "source-over";
+  fogContext.fillStyle = "rgba(103, 103, 103, 0.85)";
+  fogContext.fillRect(0, 0, size.x, size.y);
+  fogContext.globalCompositeOperation = "destination-out";
 
-  const holes = discoveredFogAreas.map(createCirclePoints);
-  fogLayer = L.polygon([fogBoundary, ...holes], {
-    stroke: false,
-    fillColor: "#5c5c5c",
-    fillOpacity: 0.8,
-    interactive: false,
-  }).addTo(map);
+  discoveredFogAreas.forEach((area) => {
+    const endpointCoordinates = getAreaEndpoints(area);
+    const endpoints = endpointCoordinates.map(([latitude, longitude]) =>
+      map.latLngToLayerPoint([latitude, longitude]).subtract(layerOrigin),
+    );
+    const radiusInPixels = map
+      .latLngToLayerPoint([
+        endpointCoordinates[0][0],
+        endpointCoordinates[0][1] +
+          area.radius /
+          (111320 *
+            Math.cos((endpointCoordinates[0][0] * Math.PI) / 180)),
+      ])
+      .distanceTo(
+        map.latLngToLayerPoint(endpointCoordinates[0]),
+      );
+
+    fogContext.beginPath();
+    if (endpoints.length === 1) {
+      fogContext.arc(
+        endpoints[0].x,
+        endpoints[0].y,
+        radiusInPixels,
+        0,
+        Math.PI * 2,
+      );
+    } else {
+      fogContext.moveTo(endpoints[0].x, endpoints[0].y);
+      fogContext.lineTo(endpoints[1].x, endpoints[1].y);
+      fogContext.lineWidth = radiusInPixels * 2;
+      fogContext.lineCap = "round";
+      fogContext.stroke();
+      return;
+    }
+    fogContext.fill();
+  });
+  fogContext.globalCompositeOperation = "source-over";
 
   discoveredAreaLayers.forEach((layer) => layer.bringToFront());
 }
@@ -76,4 +118,12 @@ window.registerDiscoveredAreaLayer = (layer) => {
   layer.bringToFront();
 };
 
+window.clearDiscoveredAreas = () => {
+  discoveredAreaLayers.forEach((layer) => map.removeLayer(layer));
+  discoveredAreaLayers.length = 0;
+  discoveredFogAreas.length = 0;
+  drawFogOfWar();
+};
+
+map.on("move zoom resize", drawFogOfWar);
 drawFogOfWar();

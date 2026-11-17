@@ -11,6 +11,7 @@ const menu = document.querySelector("#side-menu");
 const menuButton = document.querySelector("#menu-button");
 const closeMenuButton = document.querySelector("#close-menu-button");
 const menuBackdrop = document.querySelector("#menu-backdrop");
+const clearDataButton = document.querySelector("#clear-data-button");
 
 function setMenuOpen(isOpen) {
   menu.classList.toggle("is-open", isOpen);
@@ -22,3 +23,18 @@ function setMenuOpen(isOpen) {
 menuButton.addEventListener("click", () => setMenuOpen(true));
 closeMenuButton.addEventListener("click", () => setMenuOpen(false));
 menuBackdrop.addEventListener("click", () => setMenuOpen(false));
+clearDataButton.addEventListener("click", () => {
+  if (
+    !window.confirm(
+      "Möchtest du wirklich alle gespeicherten Erkundungen und Statistiken löschen?",
+    )
+  ) {
+    return;
+  }
+
+  window.stopTracking();
+  window.clearLocationMarker();
+  window.clearStoredData();
+  window.updateStatistics();
+  setMenuOpen(false);
+});

@@ -26,13 +26,6 @@ function calculateDistance(firstArea, secondArea) {
 }
 
 function drawDiscoveredArea(area) {
-  const areaLayer = L.circle([area.latitude, area.longitude], {
-    radius: area.radius,
-    color: "#8d8d8d",
-    weight: 3,
-    fillOpacity: 0,
-  }).addTo(window.worldMap);
-  window.registerDiscoveredAreaLayer(areaLayer);
   window.addFogArea(area);
 }
 
@@ -42,6 +35,9 @@ function isValidArea(area) {
     Number.isFinite(area.longitude) &&
     Number.isFinite(area.radius) &&
     area.radius > 0 &&
+    (area.startLatitude === undefined ||
+      (Number.isFinite(area.startLatitude) &&
+        Number.isFinite(area.startLongitude))) &&
     (area.countryName === undefined || typeof area.countryName === "string") &&
     (area.countryCode === undefined || typeof area.countryCode === "string") &&
     (area.countryArea === undefined ||
@@ -117,18 +113,20 @@ function loadDiscoveredAreas() {
 }
 
 function saveDiscoveredArea(area) {
-  const areaAlreadyExists = discoveredAreas.some(
-    (savedArea) => calculateDistance(savedArea, area) < area.radius,
-  );
-
-  if (areaAlreadyExists) {
-    return false;
-  }
-
   discoveredAreas.push(area);
   localStorage.setItem(storageKey, JSON.stringify(discoveredAreas));
   drawDiscoveredArea(area);
   return true;
+}
+
+function clearStoredData() {
+  localStorage.removeItem(storageKey);
+  localStorage.removeItem(distanceStorageKey);
+  localStorage.removeItem(countriesStorageKey);
+  discoveredAreas = [];
+  travelledDistance = 0;
+  visitedCountries = [];
+  window.clearDiscoveredAreas();
 }
 
 function addTravelledDistance(distance) {
@@ -159,6 +157,25 @@ function addVisitedCountry(country) {
   return true;
 }
 
+function getAreaSize(area) {
+  if (Number.isFinite(area.startLatitude)) {
+    return (
+      calculateDistance(
+        {
+          latitude: area.startLatitude,
+          longitude: area.startLongitude,
+        },
+        area,
+      ) *
+        area.radius *
+        2 +
+      Math.PI * area.radius ** 2
+    );
+  }
+
+  return Math.PI * area.radius ** 2;
+}
+
 function getStatistics() {
   const progressByCountry = new Map();
 
@@ -174,7 +191,7 @@ function getStatistics() {
       unlockedArea: 0,
       countryArea: area.countryArea,
     };
-    currentProgress.unlockedArea += Math.PI * area.radius ** 2;
+    currentProgress.unlockedArea += getAreaSize(area);
     progressByCountry.set(countryKey, currentProgress);
   });
 
@@ -193,6 +210,7 @@ function getStatistics() {
 
 window.loadDiscoveredAreas = loadDiscoveredAreas;
 window.saveDiscoveredArea = saveDiscoveredArea;
+window.clearStoredData = clearStoredData;
 window.updateAreaCountry = updateAreaCountry;
 window.getAreasWithoutCountry = getAreasWithoutCountry;
 window.addTravelledDistance = addTravelledDistance;
