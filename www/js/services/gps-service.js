@@ -46,7 +46,7 @@ class GpsService {
     const locationOptions = {
       enableHighAccuracy: true,
       maximumAge: 0,
-      timeout: 10000,
+      timeout: 15000,
     };
     const requestLocation = () =>
       navigator.geolocation.getCurrentPosition(
@@ -83,7 +83,7 @@ class GpsService {
           backgroundTitle: "WorldUnlock verwendet deinen Standort",
           requestPermissions: true,
           stale: false,
-          distanceFilter: 0,
+          distanceFilter: 3,
         },
         handlePluginLocation,
       );

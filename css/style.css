@@ -70,6 +70,24 @@ button:disabled {
   background-color: #b83b4b;
 }
 
+.secondary-button,
+.import-button {
+  width: 100%;
+  display: block;
+  margin-bottom: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.5rem;
+  text-align: center;
+  color: #102027;
+  background-color: #8edbef;
+  border: 0;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: normal;
+  font-weight: bold;
+  cursor: pointer;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -275,6 +293,45 @@ button:disabled {
 .menu-section p {
   color: #b8d5df;
   font-size: 0.9rem;
+}
+
+.menu-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1.25rem -0.25rem 0;
+  padding: 0.45rem 0.25rem;
+  border-top: 1px solid rgba(142, 219, 239, 0.12);
+  border-bottom: 1px solid rgba(142, 219, 239, 0.12);
+}
+
+.menu-tab {
+  min-width: 0;
+  padding: 0.45rem 0.15rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  border-radius: 0.35rem;
+  color: #b8d5df;
+  background: transparent;
+  font-size: 0.68rem;
+}
+
+.menu-tab > span:first-child {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.menu-tab.is-active {
+  color: #fff;
+  background-color: rgba(142, 219, 239, 0.12);
+}
+
+.menu-panel {
+  display: none;
+}
+
+.menu-panel.is-active {
+  display: block;
 }
 
 .menu-backdrop {

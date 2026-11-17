@@ -23,12 +23,13 @@ const avatarProgress = document.querySelector("#avatar-progress");
 let gpsService = null;
 let locationMarker = null;
 let lastPosition = null;
+let smoothedPosition = null;
 let lastSampleTime = null;
 let travelMode = "walking";
 let tourStartedAt = null;
 let tourTimerId = null;
 let centerOnNextLocation = false;
-const discoveryRadius = 40;
+const discoveryRadius = 25;
 const sampleIntervals = {
   walking: 10000,
   vehicle: 2000,
@@ -214,11 +215,22 @@ async function lookupCountry(position) {
       throw new Error("Länderfläche hat ein ungültiges Format.");
     }
 
+    let municipalityBoundary = null;
+    try {
+      municipalityBoundary = await window.lookupMunicipalityBoundary(
+        place.locality || place.city || place.principalSubdivision,
+      );
+    } catch (boundaryError) {
+      console.warn("Gemeindegrenze nicht verfügbar.", boundaryError);
+    }
+
     window.updateAreaCountry(position, {
       name: place.countryName,
       code: place.countryCode,
       area: countryArea,
       municipality: place.locality || place.city || place.principalSubdivision,
+      municipalityArea: municipalityBoundary?.area,
+      municipalityPolygon: municipalityBoundary?.polygon,
     });
     window.addVisitedCountry(place.countryName);
     updateStatistics();
@@ -236,22 +248,46 @@ async function enrichExistingAreas() {
   }
 }
 
+async function enrichExistingMunicipalityBoundaries() {
+  const municipalities = window.getMunicipalitiesWithoutBoundary();
+  for (const municipality of municipalities) {
+    try {
+      const boundary = await window.lookupMunicipalityBoundary(municipality);
+      window.addMunicipalityBoundary(municipality, boundary);
+    } catch (error) {
+      console.warn("Gemeindegrenze konnte nicht ergänzt werden.", error);
+    }
+  }
+  updateStatistics();
+}
+
 countrySelect.addEventListener("change", updateCountryProgress);
 
 function updateLocation(position) {
-  if (position.coords.accuracy > 100) {
+  if (
+    !Number.isFinite(position.coords.accuracy) ||
+    position.coords.accuracy > 25
+  ) {
     setStatus("GPS-Signal ungenau");
     gpsAccuracy.textContent = `${Math.round(position.coords.accuracy)} m`;
     return;
   }
 
-  const currentPosition = {
+  const rawPosition = {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     timestamp: Number.isFinite(position.timestamp)
       ? position.timestamp
       : Date.now(),
   };
+  smoothedPosition = smoothedPosition
+    ? {
+        latitude: smoothedPosition.latitude * 0.65 + rawPosition.latitude * 0.35,
+        longitude: smoothedPosition.longitude * 0.65 + rawPosition.longitude * 0.35,
+        timestamp: rawPosition.timestamp,
+      }
+    : rawPosition;
+  const currentPosition = smoothedPosition;
 
   if (Number.isFinite(position.coords.speed) && position.coords.speed > 100) {
     setStatus("Unplausible GPS-Geschwindigkeit ignoriert");
@@ -270,6 +306,15 @@ function updateLocation(position) {
 
   if (lastPosition) {
     distanceFromLastPosition = calculateDistance(lastPosition, currentPosition);
+    if (distanceFromLastPosition < 3) {
+      updatePositionDetails({
+        latitude: currentPosition.latitude,
+        longitude: currentPosition.longitude,
+        accuracy: position.coords.accuracy,
+      });
+      setStatus("GPS verbunden · kleine Abweichung geglättet.");
+      return;
+    }
     const timeInSeconds =
       (currentPosition.timestamp - lastPosition.timestamp) / 1000;
 
@@ -396,6 +441,7 @@ async function stopTracking() {
   tourTimerId = null;
   tourStartedAt = null;
   lastPosition = null;
+  smoothedPosition = null;
   lastSampleTime = null;
   startButton.disabled = false;
   stopButton.disabled = true;
@@ -451,6 +497,7 @@ try {
   updateStatistics();
   setStatus("Bereit");
   enrichExistingAreas();
+  enrichExistingMunicipalityBoundaries();
 } catch (error) {
   console.error(error);
   setStatus("Gespeicherte Gebiete konnten nicht geladen werden.");

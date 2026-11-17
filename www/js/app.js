@@ -12,6 +12,10 @@ const menuButton = document.querySelector("#menu-button");
 const closeMenuButton = document.querySelector("#close-menu-button");
 const menuBackdrop = document.querySelector("#menu-backdrop");
 const clearDataButton = document.querySelector("#clear-data-button");
+const exportDataButton = document.querySelector("#export-data-button");
+const importDataInput = document.querySelector("#import-data-input");
+const menuTabs = document.querySelectorAll(".menu-tab");
+const menuPanels = document.querySelectorAll("[data-menu-panel]");
 
 function setMenuOpen(isOpen) {
   menu.classList.toggle("is-open", isOpen);
@@ -23,6 +27,20 @@ function setMenuOpen(isOpen) {
 menuButton.addEventListener("click", () => setMenuOpen(true));
 closeMenuButton.addEventListener("click", () => setMenuOpen(false));
 menuBackdrop.addEventListener("click", () => setMenuOpen(false));
+
+menuTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    menuTabs.forEach((candidate) => {
+      const active = candidate === tab;
+      candidate.classList.toggle("is-active", active);
+      candidate.setAttribute("aria-pressed", String(active));
+    });
+    menuPanels.forEach((panel) => {
+      panel.classList.toggle("is-active", panel.dataset.menuPanel === tab.dataset.menuTab);
+    });
+  });
+});
+
 clearDataButton.addEventListener("click", () => {
   if (
     !window.confirm(
@@ -37,4 +55,20 @@ clearDataButton.addEventListener("click", () => {
   window.clearStoredData();
   window.updateStatistics();
   setMenuOpen(false);
+});
+
+exportDataButton.addEventListener("click", () => {
+  window.exportStoredData();
+});
+
+importDataInput.addEventListener("change", async () => {
+  const file = importDataInput.files?.[0];
+  if (!file) return;
+  try {
+    await window.importStoredData(file);
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Import fehlgeschlagen.");
+  } finally {
+    importDataInput.value = "";
+  }
 });

@@ -99,7 +99,21 @@
           ×
         </button>
       </div>
-      <section class="menu-section" aria-labelledby="progress-heading">
+      <nav class="menu-navigation" aria-label="Menübereiche">
+        <button class="menu-tab is-active" type="button" data-menu-tab="success" aria-pressed="true">
+          <span aria-hidden="true">♛</span>
+          <span>Erfolge</span>
+        </button>
+        <button class="menu-tab" type="button" data-menu-tab="world" aria-pressed="false">
+          <span aria-hidden="true">◉</span>
+          <span>Welt</span>
+        </button>
+        <button class="menu-tab" type="button" data-menu-tab="profile" aria-pressed="false">
+          <span aria-hidden="true">♟</span>
+          <span>Profil</span>
+        </button>
+      </nav>
+      <section class="menu-section menu-panel is-active" data-menu-panel="success" aria-labelledby="progress-heading">
         <h3 id="progress-heading">Fortschritt &amp; Erfolge</h3>
         <div class="statistics" aria-label="Entdeckungsstatistik">
           <div>
@@ -135,19 +149,7 @@
           </ul>
         </div>
       </section>
-      <section class="menu-section" aria-labelledby="avatar-heading">
-        <h3 id="avatar-heading">Dein Avatar</h3>
-        <div
-          id="avatar-grid"
-          class="avatar-grid"
-          aria-label="Avatare auswählen"
-        ></div>
-        <p id="avatar-progress"></p>
-      </section>
-      <section
-        class="menu-section country-section"
-        aria-labelledby="countries-heading"
-      >
+      <section class="menu-section menu-panel" data-menu-panel="world" aria-labelledby="countries-heading">
         <h3 id="countries-heading">Besuchte Länder</h3>
         <p id="countries-empty">Noch kein Land besucht.</p>
         <label for="country-select">Land auswählen</label>
@@ -159,8 +161,22 @@
           <span id="country-progress-bar"></span>
         </div>
       </section>
-      <section class="menu-section" aria-labelledby="data-heading">
+      <section class="menu-section menu-panel" data-menu-panel="profile" aria-label="Profil">
+        <h3 id="avatar-heading">Dein Avatar</h3>
+        <div
+          id="avatar-grid"
+          class="avatar-grid"
+          aria-label="Avatare auswählen"
+        ></div>
+        <p id="avatar-progress"></p>
         <h3 id="data-heading">Daten</h3>
+        <button id="export-data-button" class="secondary-button" type="button">
+          Daten exportieren
+        </button>
+        <label class="import-button" for="import-data-input">
+          Daten importieren
+        </label>
+        <input id="import-data-input" type="file" accept="application/json,.json" hidden>
         <button id="clear-data-button" class="danger-button" type="button">
           Alle gespeicherten Daten löschen
         </button>

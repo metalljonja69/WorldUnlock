@@ -1,4 +1,4 @@
-const cacheName = 'worldunlocked-v6';
+const cacheName = 'worldunlocked-v10';
 const localFiles = [
   './',
   './index.html',

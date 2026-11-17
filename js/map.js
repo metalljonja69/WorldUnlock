@@ -66,7 +66,7 @@ function drawFogOfWar() {
   fogContext.fillStyle = "rgba(8, 20, 27, 0.9)";
   fogContext.fillRect(0, 0, size.x, size.y);
   fogContext.globalCompositeOperation = "destination-out";
-  fogContext.shadowColor = "rgba(255, 255, 255, 0.55)";
+  fogContext.shadowColor = "rgba(255, 255, 255, 0.25)";
 
   discoveredFogAreas.forEach((area) => {
     const endpointCoordinates = getAreaEndpoints(area);
@@ -86,7 +86,7 @@ function drawFogOfWar() {
       );
 
     fogContext.beginPath();
-    fogContext.shadowBlur = Math.min(18, Math.max(4, radiusInPixels * 0.2));
+    fogContext.shadowBlur = 2;
     if (endpoints.length === 1) {
       fogContext.arc(
         endpoints[0].x,
@@ -98,10 +98,10 @@ function drawFogOfWar() {
     } else {
       fogContext.moveTo(endpoints[0].x, endpoints[0].y);
       fogContext.lineTo(endpoints[1].x, endpoints[1].y);
-      fogContext.lineWidth = radiusInPixels * 2;
+      fogContext.lineWidth = radiusInPixels * 1.25;
       fogContext.lineCap = "round";
+      fogContext.lineJoin = "round";
       fogContext.stroke();
-      return;
     }
     fogContext.fill();
   });
