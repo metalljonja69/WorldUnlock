@@ -19,6 +19,7 @@ const travelModeButtons = document.querySelectorAll(".mode-button");
 const achievementList = document.querySelector("#achievement-list");
 const avatarGrid = document.querySelector("#avatar-grid");
 const avatarProgress = document.querySelector("#avatar-progress");
+const headerLevelProgressBar = document.querySelector("#header-level-progress-bar");
 
 let gpsService = null;
 let locationMarker = null;
@@ -29,7 +30,7 @@ let travelMode = "walking";
 let tourStartedAt = null;
 let tourTimerId = null;
 let centerOnNextLocation = false;
-const discoveryRadius = 25;
+const discoveryRadius = 100;
 const sampleIntervals = {
   walking: 10000,
   vehicle: 2000,
@@ -52,6 +53,7 @@ function updateStatistics() {
   xpCount.textContent = `${statistics.exploration.xp} XP`;
   nextLevelXp.textContent = `${statistics.exploration.nextLevelXp} XP`;
   levelProgressBar.style.width = `${statistics.exploration.percentage}%`;
+  headerLevelProgressBar.style.width = `${statistics.exploration.percentage}%`;
   countriesEmpty.hidden = statistics.countries.length > 0;
   const selectedCountry = countrySelect.value;
   countrySelect.replaceChildren(

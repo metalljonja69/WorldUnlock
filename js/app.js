@@ -16,6 +16,8 @@ const exportDataButton = document.querySelector("#export-data-button");
 const importDataInput = document.querySelector("#import-data-input");
 const menuTabs = document.querySelectorAll(".menu-tab");
 const menuPanels = document.querySelectorAll("[data-menu-panel]");
+const allMenuTabTriggers = document.querySelectorAll("[data-menu-tab]");
+const bottomNavigationButtons = document.querySelectorAll(".bottom-navigation [data-menu-tab]");
 
 function setMenuOpen(isOpen) {
   menu.classList.toggle("is-open", isOpen);
@@ -28,17 +30,29 @@ menuButton.addEventListener("click", () => setMenuOpen(true));
 closeMenuButton.addEventListener("click", () => setMenuOpen(false));
 menuBackdrop.addEventListener("click", () => setMenuOpen(false));
 
-menuTabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    menuTabs.forEach((candidate) => {
-      const active = candidate === tab;
-      candidate.classList.toggle("is-active", active);
-      candidate.setAttribute("aria-pressed", String(active));
-    });
-    menuPanels.forEach((panel) => {
-      panel.classList.toggle("is-active", panel.dataset.menuPanel === tab.dataset.menuTab);
-    });
+function activateMenuTab(tabName) {
+  menuTabs.forEach((candidate) => {
+    const active = candidate.dataset.menuTab === tabName;
+    candidate.classList.toggle("is-active", active);
+    candidate.setAttribute("aria-pressed", String(active));
   });
+  menuPanels.forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.menuPanel === tabName);
+  });
+  bottomNavigationButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.menuTab === tabName);
+  });
+}
+
+allMenuTabTriggers.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    activateMenuTab(tab.dataset.menuTab);
+    setMenuOpen(true);
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setMenuOpen(false);
 });
 
 clearDataButton.addEventListener("click", () => {

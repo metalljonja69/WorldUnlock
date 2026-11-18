@@ -2,187 +2,163 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>WorldUnlock</title>
-    <meta name="theme-color" content="#101820" />
+    <meta name="theme-color" content="#08111f" />
     <link rel="stylesheet" href="css/style.css" />
     <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   </head>
   <body>
-    <main class="page">
+    <main class="app-shell">
       <header class="app-header">
-        <div>
-          <h1>WorldUnlock</h1>
+        <div class="brand" aria-label="WorldUnlock">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32">
+              <circle cx="16" cy="16" r="13"></circle>
+              <path d="M16 3v26M3 16h26M7 8c5 3 13 3 18 0M7 24c5-3 13-3 18 0"></path>
+            </svg>
+          </span>
+          <span>
+            <strong>WorldUnlock</strong>
+            <small>Explore your world</small>
+          </span>
         </div>
-        <button
-          id="menu-button"
-          class="menu-button"
-          type="button"
-          aria-label="Menü öffnen"
-          aria-controls="side-menu"
-          aria-expanded="false"
-        >
-          ☰
+
+        <button class="player-summary" type="button" data-menu-tab="profile" aria-label="Profil öffnen">
+          <span class="player-avatar" aria-hidden="true">
+            <svg viewBox="0 0 16 20"><path fill="#f3c7a6" d="M5 2h6v5H5z"/><path fill="#3155a4" d="M4 7h8v8H4z"/><path fill="#252b45" d="M5 15h2v5H5zm4 0h2v5H9z"/></svg>
+          </span>
+          <span class="player-meta">
+            <span><strong id="level-count">1</strong><small>Level</small></span>
+            <span class="header-progress"><span id="header-level-progress-bar"></span></span>
+          </span>
+        </button>
+
+        <button id="menu-button" class="icon-button settings-button" type="button" aria-label="Menü öffnen" aria-controls="side-menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"></path>
+          </svg>
         </button>
       </header>
-      <section class="exploration-panel" aria-label="Erkundung">
-        <div class="travel-mode-control">
-          <span class="control-label">Unterwegs mit</span>
-          <div
-            class="travel-mode-buttons"
-            role="group"
-            aria-label="Fortbewegungsart"
-          >
-            <button
-              class="mode-button is-selected"
-              type="button"
-              data-mode="walking"
-              aria-label="Zu Fuss, Messung alle 10 Sekunden"
-              aria-pressed="true"
-            >
+
+      <section class="map-card" aria-label="Erkundungskarte">
+        <div id="map" aria-label="Interaktive Weltkarte"></div>
+
+        <div class="map-status-card">
+          <div class="map-status-topline">
+            <span class="status-dot" aria-hidden="true"></span>
+            <p id="gps-status" role="status">Bereit</p>
+          </div>
+          <div class="tracking-details" aria-live="polite">
+            <div><span>Position</span><strong id="current-position">-</strong></div>
+            <div><span>Genauigkeit</span><strong id="gps-accuracy">-</strong></div>
+            <div><span>Tour</span><strong id="tour-duration">00:00</strong></div>
+          </div>
+        </div>
+
+        <div class="map-controls">
+          <div class="travel-mode-buttons" role="group" aria-label="Fortbewegungsart">
+            <button class="mode-button is-selected" type="button" data-mode="walking" aria-label="Zu Fuss" aria-pressed="true">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="13" cy="4" r="2" />
-                <path d="m11 8 3 2 2 4m-5-6-2 5 3 2-1 6m3-8 4 2m-5-5-4-1-2 3" />
+                <path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C15 12 17 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z"></path>
               </svg>
             </button>
-            <button
-              class="mode-button"
-              type="button"
-              data-mode="vehicle"
-              aria-label="Gefährt, Messung alle 2 Sekunden"
-              aria-pressed="false"
-            >
+            <button class="mode-button" type="button" data-mode="vehicle" aria-label="Fahrzeug" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M5 17h14l-1-6H6l-1 6Zm2 0v2m10-2v2M7 11l1-4h8l1 4M4 14h2m12 0h2"
-                />
-                <circle cx="8" cy="18" r="1" />
-                <circle cx="16" cy="18" r="1" />
+                <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"></path>
               </svg>
             </button>
           </div>
-        </div>
-        <div class="gps-controls">
-          <button id="start-button" type="button">Starten</button>
-          <button id="stop-button" type="button" disabled>Stoppen</button>
-        </div>
-        <p id="gps-status" class="gps-status" role="status">Bereit</p>
-        <div class="tracking-details" aria-live="polite">
-          <div>
-            <span>Position</span><strong id="current-position">-</strong>
-          </div>
-          <div>
-            <span>Genauigkeit</span><strong id="gps-accuracy">-</strong>
-          </div>
-          <div>
-            <span>Tourdauer</span><strong id="tour-duration">00:00</strong>
-          </div>
+          <button id="start-button" class="start-button" type="button" aria-label="Tour starten">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"></path></svg>
+          </button>
+          <button id="stop-button" class="stop-button" type="button" aria-label="Tour stoppen" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10"></rect></svg>
+          </button>
         </div>
       </section>
-      <div id="map" aria-label="Interaktive Weltkarte"></div>
     </main>
-    <aside
-      id="side-menu"
-      class="side-menu"
-      aria-label="Hauptmenü"
-      aria-hidden="true"
-    >
+
+    <aside id="side-menu" class="side-menu" aria-label="Hauptmenü" aria-hidden="true">
       <div class="side-menu-header">
-        <h2>Menü</h2>
-        <button
-          id="close-menu-button"
-          class="close-button"
-          type="button"
-          aria-label="Menü schließen"
-        >
-          ×
-        </button>
+        <div>
+          <p class="eyebrow">WorldUnlock</p>
+          <h2>Übersicht</h2>
+        </div>
+        <button id="close-menu-button" class="close-button" type="button" aria-label="Menü schließen">×</button>
       </div>
+
       <nav class="menu-navigation" aria-label="Menübereiche">
         <button class="menu-tab is-active" type="button" data-menu-tab="success" aria-pressed="true">
-          <span aria-hidden="true">♛</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9 8l-6 1 4 4-1 6 6-3 6 3-1-6 4-4-6-1z"></path></svg>
           <span>Erfolge</span>
         </button>
         <button class="menu-tab" type="button" data-menu-tab="world" aria-pressed="false">
-          <span aria-hidden="true">◉</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
           <span>Welt</span>
         </button>
         <button class="menu-tab" type="button" data-menu-tab="profile" aria-pressed="false">
-          <span aria-hidden="true">♟</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 21c1-5 13-5 14 0"></path></svg>
           <span>Profil</span>
         </button>
       </nav>
+
       <section class="menu-section menu-panel is-active" data-menu-panel="success" aria-labelledby="progress-heading">
         <h3 id="progress-heading">Fortschritt &amp; Erfolge</h3>
         <div class="statistics" aria-label="Entdeckungsstatistik">
-          <div>
-            <strong id="distance-count">0 m</strong>
-            <span>Zurückgelegte Distanz</span>
-          </div>
-          <div>
-            <strong id="area-count">0</strong>
-            <span>Entdeckte Gebiete</span>
-          </div>
-          <div>
-            <strong id="country-count">0</strong>
-            <span>Besuchte Länder</span>
-          </div>
-          <div>
-            <strong id="level-count">1</strong>
-            <span>Level</span>
-          </div>
+          <div><strong id="distance-count">0 m</strong><span>Distanz</span></div>
+          <div><strong id="area-count">0</strong><span>Gebiete</span></div>
+          <div><strong id="country-count">0</strong><span>Länder</span></div>
+          <div><strong id="xp-count">0 XP</strong><span>Erfahrung</span></div>
         </div>
         <div class="level-progress">
-          <div class="level-progress-heading">
-            <span id="xp-count">0 XP</span>
-            <span id="next-level-xp">100 XP</span>
-          </div>
-          <div class="progress-track" aria-label="Level-Fortschritt">
-            <span id="level-progress-bar"></span>
-          </div>
+          <div class="level-progress-heading"><span id="next-level-xp">100 XP</span><span>Nächstes Level</span></div>
+          <div class="progress-track" aria-label="Level-Fortschritt"><span id="level-progress-bar"></span></div>
         </div>
         <div class="achievement-list">
           <h4>Achievements</h4>
-          <ul id="achievement-list">
-            <li>Noch keine Gemeinde erfasst.</li>
-          </ul>
+          <ul id="achievement-list"><li>Noch keine Gemeinde erfasst.</li></ul>
         </div>
       </section>
+
       <section class="menu-section menu-panel" data-menu-panel="world" aria-labelledby="countries-heading">
         <h3 id="countries-heading">Besuchte Länder</h3>
         <p id="countries-empty">Noch kein Land besucht.</p>
         <label for="country-select">Land auswählen</label>
-        <select id="country-select" disabled>
-          <option value="">Noch kein Land verfügbar</option>
-        </select>
+        <select id="country-select" disabled><option value="">Noch kein Land verfügbar</option></select>
         <p id="country-progress" class="country-progress">0 % freigeschaltet</p>
-        <div class="progress-track" aria-hidden="true">
-          <span id="country-progress-bar"></span>
-        </div>
+        <div class="progress-track" aria-hidden="true"><span id="country-progress-bar"></span></div>
       </section>
+
       <section class="menu-section menu-panel" data-menu-panel="profile" aria-label="Profil">
         <h3 id="avatar-heading">Dein Avatar</h3>
-        <div
-          id="avatar-grid"
-          class="avatar-grid"
-          aria-label="Avatare auswählen"
-        ></div>
+        <div id="avatar-grid" class="avatar-grid" aria-label="Avatare auswählen"></div>
         <p id="avatar-progress"></p>
         <h3 id="data-heading">Daten</h3>
-        <button id="export-data-button" class="secondary-button" type="button">
-          Daten exportieren
-        </button>
-        <label class="import-button" for="import-data-input">
-          Daten importieren
-        </label>
+        <button id="export-data-button" class="secondary-button" type="button">Daten exportieren</button>
+        <label class="import-button" for="import-data-input">Daten importieren</label>
         <input id="import-data-input" type="file" accept="application/json,.json" hidden>
-        <button id="clear-data-button" class="danger-button" type="button">
-          Alle gespeicherten Daten löschen
-        </button>
+        <button id="clear-data-button" class="danger-button" type="button">Alle gespeicherten Daten löschen</button>
       </section>
     </aside>
     <div id="menu-backdrop" class="menu-backdrop" hidden></div>
+
+    <nav class="bottom-navigation" aria-label="Hauptnavigation">
+      <button type="button" data-menu-tab="world" aria-label="Weltkarte">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
+        <span>Karte</span>
+      </button>
+      <button type="button" data-menu-tab="success" aria-label="Erfolge">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9 8l-6 1 4 4-1 6 6-3 6 3-1-6 4-4-6-1z"></path></svg>
+        <span>Erfolge</span>
+      </button>
+      <button type="button" data-menu-tab="profile" aria-label="Profil">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 21c1-5 13-5 14 0"></path></svg>
+        <span>Profil</span>
+      </button>
+    </nav>
+
     <script src="vendor/leaflet/leaflet.js"></script>
     <script src="js/map.js"></script>
     <script src="js/storage.js"></script>

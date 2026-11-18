@@ -98,7 +98,7 @@ function drawFogOfWar() {
     } else {
       fogContext.moveTo(endpoints[0].x, endpoints[0].y);
       fogContext.lineTo(endpoints[1].x, endpoints[1].y);
-      fogContext.lineWidth = radiusInPixels * 1.25;
+      fogContext.lineWidth = radiusInPixels * 2;
       fogContext.lineCap = "round";
       fogContext.lineJoin = "round";
       fogContext.stroke();

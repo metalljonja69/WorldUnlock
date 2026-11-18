@@ -20,6 +20,7 @@ function coverageCellKey(latitude, longitude) {
 }
 
 function registerCoverageArea(area) {
+  let addedCoverage = false;
   const endpoints = Number.isFinite(area.startLatitude)
     ? [
         { latitude: area.startLatitude, longitude: area.startLongitude },
@@ -34,18 +35,20 @@ function registerCoverageArea(area) {
     const steps = Math.max(1, Math.ceil(segmentDistance / 10));
     for (let step = 0; step <= steps; step += 1) {
       const fraction = step / steps;
-      addCoverageCircle({
+      addedCoverage = addCoverageCircle({
         latitude: start.latitude + (end.latitude - start.latitude) * fraction,
         longitude: start.longitude + (end.longitude - start.longitude) * fraction,
-      }, area.radius);
+      }, area.radius) || addedCoverage;
     }
   }
   if (endpoints.length === 1) {
-    addCoverageCircle(endpoints[0], area.radius);
+    addedCoverage = addCoverageCircle(endpoints[0], area.radius) || addedCoverage;
   }
+  return addedCoverage;
 }
 
 function addCoverageCircle(center, radius) {
+  let addedCoverage = false;
   const latitudeStep = radius / 111320;
   const longitudeStep = radius /
     (111320 * Math.max(0.1, Math.cos((center.latitude * Math.PI) / 180)));
@@ -56,9 +59,14 @@ function addCoverageCircle(center, radius) {
       const longitude = center.longitude +
         longitudeOffset /
         (111320 * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
-      discoveredCoverageCells.add(coverageCellKey(latitude, longitude));
+      const cellKey = coverageCellKey(latitude, longitude);
+      if (!discoveredCoverageCells.has(cellKey)) {
+        discoveredCoverageCells.add(cellKey);
+        addedCoverage = true;
+      }
     }
   }
+  return addedCoverage;
 }
 
 const avatarDefinitions = [
@@ -316,15 +324,11 @@ function loadDiscoveredAreas() {
 }
 
 function saveDiscoveredArea(area) {
-  const duplicateArea = discoveredAreas.some(
-    (savedArea) =>
-      calculateDistance(savedArea, area) <= Math.max(savedArea.radius, area.radius),
-  );
-  if (duplicateArea) {
+  const addedCoverage = registerCoverageArea(area);
+  if (!addedCoverage) {
     return false;
   }
   discoveredAreas.push(area);
-  registerCoverageArea(area);
   localStorage.setItem(storageKey, JSON.stringify(discoveredAreas));
   drawDiscoveredArea(area);
   return true;
