@@ -30,6 +30,7 @@
             <svg viewBox="0 0 16 20"><path fill="#f3c7a6" d="M5 2h6v5H5z"/><path fill="#3155a4" d="M4 7h8v8H4z"/><path fill="#252b45" d="M5 15h2v5H5zm4 0h2v5H9z"/></svg>
           </span>
           <span class="player-meta">
+            <span class="player-name" id="player-name">Noch kein Name</span>
             <span><strong id="level-count">1</strong><small>Level</small></span>
             <span class="header-progress"><span id="header-level-progress-bar"></span></span>
           </span>
@@ -78,13 +79,63 @@
           </button>
         </div>
       </section>
+
+      <section class="dashboard-grid" aria-label="Fortschritt auf einen Blick">
+        <article class="dashboard-card progress-overview">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Deine Expedition</p>
+              <h2>Fortschritt</h2>
+            </div>
+            <button type="button" class="text-button" data-menu-tab="statistics">Alle Statistiken</button>
+          </div>
+          <div class="progress-cards">
+            <div><span>Entdeckte Fläche</span><strong id="dashboard-area">Noch keine Daten</strong></div>
+            <div><span>Besuchte Länder</span><strong id="dashboard-countries">0</strong></div>
+            <div><span>Neue Entdeckungen</span><strong id="dashboard-discoveries">0</strong></div>
+            <div><span>Gesamte XP</span><strong id="dashboard-xp">0 XP</strong></div>
+          </div>
+        </article>
+
+        <article class="dashboard-card achievement-preview">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Kürzlich erreicht</p>
+              <h2>Erfolge</h2>
+            </div>
+            <button type="button" class="text-button" data-menu-tab="success">Alle ansehen</button>
+          </div>
+          <div id="achievement-preview" class="achievement-preview-list">
+            <p class="empty-state">Noch keine Erfolge freigeschaltet.</p>
+          </div>
+        </article>
+
+        <article class="dashboard-card avatar-preview">
+          <div>
+            <p class="eyebrow">Aktueller Avatar</p>
+            <div id="dashboard-avatar" class="dashboard-avatar" aria-hidden="true"></div>
+            <strong id="dashboard-avatar-name">Anfänger</strong>
+          </div>
+          <button type="button" class="secondary-button compact-button" data-menu-tab="profile">Avatar ändern</button>
+        </article>
+
+        <article class="dashboard-card challenge-preview">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Herausforderungen</p>
+              <h2>Nächste Ziele</h2>
+            </div>
+          </div>
+          <p class="empty-state">Tägliche, wöchentliche und langfristige Herausforderungen sind noch nicht verfügbar.</p>
+        </article>
+      </section>
     </main>
 
     <aside id="side-menu" class="side-menu" aria-label="Hauptmenü" aria-hidden="true">
       <div class="side-menu-header">
         <div>
           <p class="eyebrow">WorldUnlock</p>
-          <h2>Übersicht</h2>
+          <h2>Expedition-Menü</h2>
         </div>
         <button id="close-menu-button" class="close-button" type="button" aria-label="Menü schließen">×</button>
       </div>
@@ -102,10 +153,18 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 21c1-5 13-5 14 0"></path></svg>
           <span>Profil</span>
         </button>
+        <button class="menu-tab" type="button" data-menu-tab="statistics" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z"></path></svg>
+          <span>Statistiken</span>
+        </button>
+        <button class="menu-tab" type="button" data-menu-tab="settings" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.2 2.2m9.8 9.8 2.2 2.2m0-14.2-2.2 2.2M7.1 16.9l-2.2 2.2"></path></svg>
+          <span>Einstellungen</span>
+        </button>
       </nav>
 
       <section class="menu-section menu-panel is-active" data-menu-panel="success" aria-labelledby="progress-heading">
-        <h3 id="progress-heading">Fortschritt &amp; Erfolge</h3>
+        <h3 id="progress-heading">Erfolge</h3>
         <div class="statistics" aria-label="Entdeckungsstatistik">
           <div><strong id="distance-count">0 m</strong><span>Distanz</span></div>
           <div><strong id="area-count">0</strong><span>Gebiete</span></div>
@@ -117,25 +176,102 @@
           <div class="progress-track" aria-label="Level-Fortschritt"><span id="level-progress-bar"></span></div>
         </div>
         <div class="achievement-list">
-          <h4>Achievements</h4>
-          <ul id="achievement-list"><li>Noch keine Gemeinde erfasst.</li></ul>
+          <div class="section-heading">
+            <h4>Alle Erfolge</h4>
+            <span id="achievement-status" class="status-caption">0 freigeschaltet</span>
+          </div>
+          <div id="achievement-list" class="achievement-grid"></div>
         </div>
       </section>
 
       <section class="menu-section menu-panel" data-menu-panel="world" aria-labelledby="countries-heading">
-        <h3 id="countries-heading">Besuchte Länder</h3>
-        <p id="countries-empty">Noch kein Land besucht.</p>
-        <label for="country-select">Land auswählen</label>
-        <select id="country-select" disabled><option value="">Noch kein Land verfügbar</option></select>
-        <p id="country-progress" class="country-progress">0 % freigeschaltet</p>
-        <div class="progress-track" aria-hidden="true"><span id="country-progress-bar"></span></div>
+        <h3 id="countries-heading">Weltübersicht</h3>
+        <div class="world-hierarchy">
+          <article class="world-level">
+            <p class="eyebrow">Weltweit</p>
+            <strong id="world-discovered-area">Noch keine Daten</strong>
+            <span id="world-discovered-count">0 Gebiete entdeckt</span>
+          </article>
+          <article class="world-level">
+            <p class="eyebrow">Kontinente</p>
+            <p class="empty-state">Kontinentdaten sind noch nicht verfügbar.</p>
+          </article>
+          <article class="world-level">
+            <p class="eyebrow">Länder</p>
+            <p id="countries-empty" class="empty-state">Noch kein Land besucht.</p>
+            <div id="world-country-list" class="world-country-list"></div>
+          </article>
+          <article class="world-level">
+            <p class="eyebrow">Regionen &amp; Städte</p>
+            <p class="empty-state">Regionen und Städte werden ergänzt, sobald geografische Daten verfügbar sind.</p>
+            <div id="municipality-list" class="municipality-list"></div>
+          </article>
+        </div>
       </section>
 
       <section class="menu-section menu-panel" data-menu-panel="profile" aria-label="Profil">
-        <h3 id="avatar-heading">Dein Avatar</h3>
-        <div id="avatar-grid" class="avatar-grid" aria-label="Avatare auswählen"></div>
-        <p id="avatar-progress"></p>
-        <h3 id="data-heading">Daten</h3>
+        <h3>Profil</h3>
+        <article class="profile-hero">
+          <div id="profile-avatar" class="profile-avatar" aria-hidden="true"></div>
+          <div>
+            <label for="player-name-input">Spielername</label>
+            <input id="player-name-input" class="text-input" type="text" maxlength="30" placeholder="Noch kein Name">
+            <strong>Level <span id="profile-level">1</span></strong>
+          </div>
+        </article>
+        <div class="level-progress">
+          <div class="level-progress-heading"><span id="profile-next-xp">100 XP</span><span>Gesamte XP: <span id="profile-xp">0</span></span></div>
+          <div class="progress-track"><span id="profile-progress-bar"></span></div>
+        </div>
+        <article class="profile-section">
+          <h4>Avatar-Auswahl</h4>
+          <div id="avatar-grid" class="avatar-grid" aria-label="Avatare auswählen"></div>
+          <p id="avatar-progress"></p>
+        </article>
+        <article class="profile-section">
+          <h4>Freigeschaltete Erfolge</h4>
+          <div id="profile-achievements" class="profile-achievements">
+            <p class="empty-state">Noch keine Erfolge freigeschaltet.</p>
+          </div>
+        </article>
+        <article class="profile-section">
+          <h4>Persönliche Statistiken</h4>
+          <div class="statistics">
+            <div><strong id="profile-distance">0 m</strong><span>Distanz</span></div>
+            <div><strong id="profile-area">Noch keine Daten</strong><span>Entdeckte Fläche</span></div>
+            <div><strong id="profile-countries">0</strong><span>Länder</span></div>
+            <div><strong id="profile-discoveries">0</strong><span>Gebiete</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="menu-section menu-panel" data-menu-panel="statistics" aria-labelledby="statistics-heading">
+        <h3 id="statistics-heading">Statistiken</h3>
+        <div class="statistics">
+          <div><strong id="statistics-distance">0 m</strong><span>Gesamtdistanz</span></div>
+          <div><strong id="statistics-area">Noch keine Daten</strong><span>Entdeckte Fläche</span></div>
+          <div><strong id="statistics-countries">0</strong><span>Länder</span></div>
+          <div><strong id="statistics-xp">0 XP</strong><span>Gesamte XP</span></div>
+        </div>
+        <article class="stat-chart-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Persönlicher Fortschritt</p>
+              <h4>Verlauf</h4>
+            </div>
+          </div>
+          <div id="progress-chart" class="progress-chart">
+            <p class="empty-state">Noch keine historischen Daten verfügbar. Der Verlauf wird angezeigt, sobald Erkundungen gespeichert werden.</p>
+          </div>
+        </article>
+        <div class="statistics secondary-statistics">
+          <div><strong id="statistics-continent-count">Noch keine Daten</strong><span>Kontinente</span></div>
+          <div><strong id="statistics-tour-time">Nicht verfügbar</strong><span>Gesamte Erkundungszeit</span></div>
+        </div>
+      </section>
+
+      <section class="menu-section menu-panel" data-menu-panel="settings" aria-labelledby="settings-heading">
+        <h3 id="settings-heading">Einstellungen &amp; Daten</h3>
         <button id="export-data-button" class="secondary-button" type="button">Daten exportieren</button>
         <label class="import-button" for="import-data-input">Daten importieren</label>
         <input id="import-data-input" type="file" accept="application/json,.json" hidden>
@@ -145,13 +281,21 @@
     <div id="menu-backdrop" class="menu-backdrop" hidden></div>
 
     <nav class="bottom-navigation" aria-label="Hauptnavigation">
-      <button type="button" data-menu-tab="world" aria-label="Weltkarte">
+      <button type="button" data-menu-tab="map" aria-label="Karte" class="is-active">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
         <span>Karte</span>
       </button>
       <button type="button" data-menu-tab="success" aria-label="Erfolge">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 9 8l-6 1 4 4-1 6 6-3 6 3-1-6 4-4-6-1z"></path></svg>
         <span>Erfolge</span>
+      </button>
+      <button type="button" data-menu-tab="world" aria-label="Welt">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
+        <span>Welt</span>
+      </button>
+      <button type="button" data-menu-tab="statistics" aria-label="Statistiken">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z"></path></svg>
+        <span>Statistiken</span>
       </button>
       <button type="button" data-menu-tab="profile" aria-label="Profil">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M5 21c1-5 13-5 14 0"></path></svg>
@@ -165,6 +309,14 @@
     <script src="js/services/exploration-engine.js"></script>
     <script src="js/services/gps-service.js"></script>
     <script src="js/gps.js"></script>
+    <script src="js/ui/navigation.js"></script>
+    <script src="js/ui/dashboard.js"></script>
+    <script src="js/ui/achievements.js"></script>
+    <script src="js/ui/avatars.js"></script>
+    <script src="js/ui/world.js"></script>
+    <script src="js/ui/statistics.js"></script>
+    <script src="js/ui/profile.js"></script>
+    <script src="js/ui/settings.js"></script>
     <script src="js/app.js"></script>
   </body>
 </html>

@@ -11,15 +11,10 @@ const levelProgressBar = document.querySelector("#level-progress-bar");
 const currentPosition = document.querySelector("#current-position");
 const gpsAccuracy = document.querySelector("#gps-accuracy");
 const tourDuration = document.querySelector("#tour-duration");
-const countryProgressBar = document.querySelector("#country-progress-bar");
-const countriesEmpty = document.querySelector("#countries-empty");
-const countrySelect = document.querySelector("#country-select");
-const countryProgress = document.querySelector("#country-progress");
 const travelModeButtons = document.querySelectorAll(".mode-button");
-const achievementList = document.querySelector("#achievement-list");
-const avatarGrid = document.querySelector("#avatar-grid");
-const avatarProgress = document.querySelector("#avatar-progress");
 const headerLevelProgressBar = document.querySelector("#header-level-progress-bar");
+const statisticsContinentCount = document.querySelector("#statistics-continent-count");
+const statisticsTourTime = document.querySelector("#statistics-tour-time");
 
 let gpsService = null;
 let locationMarker = null;
@@ -54,74 +49,9 @@ function updateStatistics() {
   nextLevelXp.textContent = `${statistics.exploration.nextLevelXp} XP`;
   levelProgressBar.style.width = `${statistics.exploration.percentage}%`;
   headerLevelProgressBar.style.width = `${statistics.exploration.percentage}%`;
-  countriesEmpty.hidden = statistics.countries.length > 0;
-  const selectedCountry = countrySelect.value;
-  countrySelect.replaceChildren(
-    ...statistics.countries.map((countryName) => {
-      const countryOption = document.createElement("option");
-      countryOption.value = countryName;
-      countryOption.textContent = countryName;
-      return countryOption;
-    }),
-  );
-  countrySelect.disabled = statistics.countries.length === 0;
-  if (statistics.countries.includes(selectedCountry)) {
-    countrySelect.value = selectedCountry;
-  }
-  updateCountryProgress();
-  updateAchievements();
-  updateAvatarOptions();
-}
-
-function updateCountryProgress() {
-  const selectedCountry = window
-    .getStatistics()
-    .countryProgress.find((country) => country.name === countrySelect.value);
-  countryProgress.textContent = selectedCountry
-    ? `${selectedCountry.percentage.toFixed(2)} % freigeschaltet`
-    : "0 % freigeschaltet";
-  countryProgressBar.style.width = `${selectedCountry ? selectedCountry.percentage : 0}%`;
-}
-
-function updateAchievements() {
-  const municipalities = window.getStatistics().municipalities;
-  achievementList.replaceChildren(
-    ...(municipalities.length
-      ? municipalities.map((municipality) => {
-          const item = document.createElement("li");
-          item.textContent = `${municipality.name}: ${municipality.percentage.toFixed(2)} % erfasst`;
-          return item;
-        })
-      : [Object.assign(document.createElement("li"), {
-          textContent: "Noch keine Gemeinde erfasst.",
-        })]),
-  );
-}
-
-function updateAvatarOptions() {
-  const definitions = window.getAvatarDefinitions();
-  const selectedAvatar = window.getSelectedAvatar();
-  avatarGrid.replaceChildren(
-    ...definitions.map((avatar) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "avatar-choice";
-      button.disabled = !avatar.unlocked;
-      button.dataset.avatarId = avatar.id;
-      button.setAttribute("aria-label", avatar.unlocked ? avatar.label : `${avatar.label}, gesperrt`);
-      button.setAttribute("aria-pressed", String(avatar.id === selectedAvatar.id));
-      button.innerHTML = `${avatar.svg}<span>${avatar.label}</span>`;
-      return button;
-    }),
-  );
-  const travelledDistance = window.getStatistics().distance;
-  avatarProgress.textContent = definitions
-    .filter((avatar) => !avatar.unlocked)
-    .map((avatar) => `${avatar.label}: ${formatDistance(Math.max(0, avatar.requiredDistance - travelledDistance))}`)
-    .join(" · ") || "Alle Avatare freigeschaltet.";
-  if (locationMarker) {
-    window.updateLocationAvatar(locationMarker.getLatLng(), selectedAvatar);
-  }
+  document.dispatchEvent(new CustomEvent("worldunlock:statistics-updated", {
+    detail: statistics,
+  }));
 }
 
 function setStatus(message) {
@@ -262,8 +192,6 @@ async function enrichExistingMunicipalityBoundaries() {
   }
   updateStatistics();
 }
-
-countrySelect.addEventListener("change", updateCountryProgress);
 
 function updateLocation(position) {
   if (
@@ -473,20 +401,12 @@ travelModeButtons.forEach((button) => button.addEventListener("click", () => {
     `Bereit · Messung alle ${sampleIntervals[travelMode] / 1000} Sekunden`,
   );
 }));
-avatarGrid.addEventListener("click", (event) => {
-  const avatarButton = event.target.closest(".avatar-choice");
-  if (!avatarButton) {
-    return;
-  }
-  try {
-    window.setSelectedAvatar(avatarButton.dataset.avatarId);
-    updateAvatarOptions();
-  } catch (error) {
-    console.error(error);
-    setStatus("Dieser Avatar ist noch nicht freigeschaltet.");
+
+document.addEventListener("worldunlock:avatar-selected", (event) => {
+  if (locationMarker) {
+    window.updateLocationAvatar(locationMarker.getLatLng(), event.detail);
   }
 });
-
 startButton.addEventListener("click", startTracking);
 stopButton.addEventListener("click", stopTracking);
 window.updateStatistics = updateStatistics;
