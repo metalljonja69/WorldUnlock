@@ -13,23 +13,17 @@ const gpsAccuracy = document.querySelector("#gps-accuracy");
 const tourDuration = document.querySelector("#tour-duration");
 const travelModeButtons = document.querySelectorAll(".mode-button");
 const headerLevelProgressBar = document.querySelector("#header-level-progress-bar");
-const statisticsContinentCount = document.querySelector("#statistics-continent-count");
-const statisticsTourTime = document.querySelector("#statistics-tour-time");
+
+const discoveryRadius = 100;
+const travelModeLabels = { walking: "zu Fuss", vehicle: "Fahrzeug" };
 
 let gpsService = null;
-let locationMarker = null;
-let lastPosition = null;
-let smoothedPosition = null;
-let lastSampleTime = null;
-let travelMode = "walking";
+let locationFilter = window.createLocationFilter();
 let tourStartedAt = null;
 let tourTimerId = null;
 let centerOnNextLocation = false;
-const discoveryRadius = 100;
-const sampleIntervals = {
-  walking: 10000,
-  vehicle: 2000,
-};
+let hasLocation = false;
+let lastStatusDetail = "";
 
 function formatDistance(distance) {
   if (distance >= 1000) {
@@ -60,9 +54,10 @@ function setStatus(message) {
 
 function formatDuration(milliseconds) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
-  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(
-    seconds % 60,
-  ).padStart(2, "0")}`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+  const rest = String(seconds % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${minutes}:${rest}` : `${minutes}:${rest}`;
 }
 
 function updateTourDuration() {
@@ -71,261 +66,189 @@ function updateTourDuration() {
     : "00:00";
 }
 
-function updatePositionDetails(position) {
+function updatePositionDetails(position, accuracy) {
   currentPosition.textContent = `${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}`;
-  gpsAccuracy.textContent = `${Math.round(position.accuracy)} m`;
+  updateAccuracy(accuracy);
 }
 
-function calculateDistance(firstPosition, secondPosition) {
-  const earthRadius = 6371000;
-  const latitudeDifference =
-    ((secondPosition.latitude - firstPosition.latitude) * Math.PI) / 180;
-  const longitudeDifference =
-    ((secondPosition.longitude - firstPosition.longitude) * Math.PI) / 180;
-  const firstLatitude = (firstPosition.latitude * Math.PI) / 180;
-  const secondLatitude = (secondPosition.latitude * Math.PI) / 180;
-
-  const distance =
-    Math.sin(latitudeDifference / 2) ** 2 +
-    Math.cos(firstLatitude) *
-      Math.cos(secondLatitude) *
-      Math.sin(longitudeDifference / 2) ** 2;
-
-  return (
-    earthRadius * 2 * Math.atan2(Math.sqrt(distance), Math.sqrt(1 - distance))
-  );
+function updateAccuracy(accuracy) {
+  gpsAccuracy.textContent = Number.isFinite(accuracy) ? `${Math.round(accuracy)} m` : "-";
 }
 
-function unlockArea(position, previousPosition) {
-  const areaWasSaved = window.saveDiscoveredArea({
-    latitude: position.latitude,
-    longitude: position.longitude,
-    radius: discoveryRadius,
-    ...(previousPosition
-      ? {
-          startLatitude: previousPosition.latitude,
-          startLongitude: previousPosition.longitude,
-        }
-      : {}),
+function showTravelMode(mode) {
+  travelModeButtons.forEach((button) => {
+    const isSelected = button.dataset.mode === mode;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
   });
-  if (areaWasSaved) {
-    lookupCountry(position);
-  }
-  return areaWasSaved;
 }
 
-async function lookupCountry(position) {
-  try {
-    const response = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.latitude}&longitude=${position.longitude}&localityLanguage=de`,
-    );
+function trackingStatus(detail = "") {
+  const mode = travelModeLabels[locationFilter.getMode()];
+  return `GPS verbunden · ${mode}${detail}`;
+}
 
-    if (!response.ok) {
-      throw new Error(`Reverse-Geocoding fehlgeschlagen: ${response.status}`);
-    }
-
-    const place = await response.json();
-
-    if (!place.countryName || !place.countryCode) {
-      throw new Error("Reverse-Geocoding lieferte kein Land.");
-    }
-
-    const countryResponse = await fetch(
-      `https://api.worldbank.org/v2/country/${place.countryCode}/indicator/AG.LND.TOTL.K2?format=json&date=2023`,
-    );
-
-    if (!countryResponse.ok) {
-      throw new Error(
-        `Länderfläche konnte nicht geladen werden: ${countryResponse.status}`,
-      );
-    }
-
-    const countryData = await countryResponse.json();
-    const countryArea = countryData[1]?.[0]?.value;
-
-    if (!Number.isFinite(countryArea) || countryArea <= 0) {
-      throw new Error("Länderfläche hat ein ungültiges Format.");
-    }
-
-    let municipalityBoundary = null;
+// Land und Gemeinde für ein neu gespeichertes Gebiet nachschlagen.
+async function assignPlace(area) {
+  const place = await window.placeService.lookupPlace(area);
+  window.updateAreaCountry(area, place);
+  window.addVisitedCountry(place.name);
+  if (place.municipality) {
     try {
-      municipalityBoundary = await window.lookupMunicipalityBoundary(
-        place.locality || place.city || place.principalSubdivision,
-      );
-    } catch (boundaryError) {
-      console.warn("Gemeindegrenze nicht verfügbar.", boundaryError);
+      await window.lookupMunicipalityBoundary(place.municipality, place.code);
+    } catch (error) {
+      console.warn("Gemeindegrenze nicht verfügbar.", error);
     }
-
-    window.updateAreaCountry(position, {
-      name: place.countryName,
-      code: place.countryCode,
-      area: countryArea,
-      municipality: place.locality || place.city || place.principalSubdivision,
-      municipalityArea: municipalityBoundary?.area,
-      municipalityPolygon: municipalityBoundary?.polygon,
-    });
-    window.addVisitedCountry(place.countryName);
-    updateStatistics();
-  } catch (error) {
-    console.error(error);
-    setStatus("Land konnte nicht ermittelt werden.");
   }
+}
+
+function lookupCountry(area) {
+  assignPlace(area)
+    .then(updateStatistics)
+    .catch((error) => {
+      console.warn("Land konnte nicht ermittelt werden.", error);
+    });
 }
 
 async function enrichExistingAreas() {
   const areas = window.getAreasWithoutCountry();
-
   for (const area of areas) {
-    await lookupCountry(area);
+    try {
+      await assignPlace(area);
+    } catch (error) {
+      console.warn("Land konnte nicht ergänzt werden.", error);
+      // Offline oder Dienst nicht erreichbar: später erneut versuchen.
+      if (error instanceof TypeError) break;
+    }
   }
+  if (areas.length) updateStatistics();
 }
 
 async function enrichExistingMunicipalityBoundaries() {
   const municipalities = window.getMunicipalitiesWithoutBoundary();
   for (const municipality of municipalities) {
     try {
-      const boundary = await window.lookupMunicipalityBoundary(municipality);
-      window.addMunicipalityBoundary(municipality, boundary);
+      await window.lookupMunicipalityBoundary(municipality, "CH");
     } catch (error) {
       console.warn("Gemeindegrenze konnte nicht ergänzt werden.", error);
+      if (error instanceof TypeError) break;
     }
   }
-  updateStatistics();
+  if (municipalities.length) updateStatistics();
 }
 
-function updateLocation(position) {
-  if (
-    !Number.isFinite(position.coords.accuracy) ||
-    position.coords.accuracy > 25
-  ) {
-    setStatus("GPS-Signal ungenau");
-    gpsAccuracy.textContent = `${Math.round(position.coords.accuracy)} m`;
-    return;
-  }
-
-  const rawPosition = {
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude,
-    timestamp: Number.isFinite(position.timestamp)
-      ? position.timestamp
-      : Date.now(),
-  };
-  smoothedPosition = smoothedPosition
-    ? {
-        latitude: smoothedPosition.latitude * 0.65 + rawPosition.latitude * 0.35,
-        longitude: smoothedPosition.longitude * 0.65 + rawPosition.longitude * 0.35,
-        timestamp: rawPosition.timestamp,
-      }
-    : rawPosition;
-  const currentPosition = smoothedPosition;
-
-  if (Number.isFinite(position.coords.speed) && position.coords.speed > 100) {
-    setStatus("Unplausible GPS-Geschwindigkeit ignoriert");
-    return;
-  }
-
-  if (
-    lastSampleTime !== null &&
-    currentPosition.timestamp - lastSampleTime <
-      sampleIntervals[travelMode]
-  ) {
-    return;
-  }
-
-  let distanceFromLastPosition = 0;
-
-  if (lastPosition) {
-    distanceFromLastPosition = calculateDistance(lastPosition, currentPosition);
-    if (distanceFromLastPosition < 3) {
-      updatePositionDetails({
-        latitude: currentPosition.latitude,
-        longitude: currentPosition.longitude,
-        accuracy: position.coords.accuracy,
-      });
-      setStatus("GPS verbunden · kleine Abweichung geglättet.");
-      return;
-    }
-    const timeInSeconds =
-      (currentPosition.timestamp - lastPosition.timestamp) / 1000;
-
-    if (
-      timeInSeconds > 0 &&
-      distanceFromLastPosition / timeInSeconds > 100
-    ) {
-      setStatus("Unrealistischer GPS-Sprung ignoriert.");
-      return;
-    }
-  }
-
-  const previousPosition = lastPosition;
-  lastPosition = currentPosition;
-  lastSampleTime = currentPosition.timestamp;
-  const coordinates = [currentPosition.latitude, currentPosition.longitude];
-  updatePositionDetails({
-    latitude: currentPosition.latitude,
-    longitude: currentPosition.longitude,
-    accuracy: position.coords.accuracy,
+function recordArea(record, accuracy, timestamp) {
+  const area = window.saveDiscoveredArea({
+    latitude: record.position.latitude,
+    longitude: record.position.longitude,
+    radius: discoveryRadius,
+    ...(record.previous
+      ? {
+          startLatitude: record.previous.latitude,
+          startLongitude: record.previous.longitude,
+        }
+      : {}),
   });
-
-  const selectedAvatar = window.getSelectedAvatar();
-  if (!locationMarker) {
-    locationMarker = L.marker(coordinates);
-  } else {
-    locationMarker.setLatLng(coordinates);
+  if (area) {
+    lookupCountry(area);
   }
-  window.updateLocationAvatar(
-    coordinates,
-    selectedAvatar,
-    position.coords.accuracy,
-  );
-
-  let areaWasUnlocked;
+  if (record.distance > 0) {
+    window.addTravelledDistance(record.distance);
+  }
   const explorationResult = window.explorationEngine.processLocation({
-    latitude: currentPosition.latitude,
-    longitude: currentPosition.longitude,
-    accuracy: position.coords.accuracy,
-    timestamp: currentPosition.timestamp,
-    speed: position.coords.speed ?? null,
+    latitude: record.position.latitude,
+    longitude: record.position.longitude,
+    accuracy,
+    timestamp,
   });
+  return { areaWasUnlocked: Boolean(area), explorationResult };
+}
 
-  try {
-    areaWasUnlocked = unlockArea(currentPosition, previousPosition);
-    if (distanceFromLastPosition > 0) {
-      window.addTravelledDistance(distanceFromLastPosition);
-    }
-    updateStatistics();
-  } catch (error) {
-    console.error(error);
-    setStatus("Gebiet konnte nicht gespeichert werden.");
+function updateLocation(fix) {
+  const result = locationFilter.process(fix);
+
+  if (result.type === "invalid" || result.type === "stale") {
     return;
   }
+  if (result.type === "inaccurate") {
+    updateAccuracy(result.accuracy);
+    setStatus(hasLocation ? trackingStatus(" · Signal sehr ungenau") : "GPS-Signal wird gesucht …");
+    return;
+  }
+  if (result.type === "outlier") {
+    setStatus(trackingStatus(" · GPS-Sprung ignoriert"));
+    return;
+  }
+
+  hasLocation = true;
+  const coordinates = [result.position.latitude, result.position.longitude];
+
+  // Die Anzeige folgt jeder gültigen Messung, auch wenn sie zu ungenau
+  // zum Freischalten ist. Der Genauigkeitskreis zeigt die Unsicherheit.
+  updatePositionDetails(result.position, result.accuracy);
+  window.updateLocationAvatar(coordinates, window.getSelectedAvatar(), result.accuracy);
+  showTravelMode(result.mode);
 
   if (centerOnNextLocation) {
-    window.worldMap.setView(coordinates, 16);
+    window.worldMap.setView(coordinates, Math.max(window.worldMap.getZoom(), 16));
     centerOnNextLocation = false;
   }
-  const discoveryMessage = areaWasUnlocked
-    ? " Neues Gebiet freigeschaltet."
-    : "";
-  const xpMessage = explorationResult.status === "new"
-    ? ` +${explorationResult.xpAwarded} XP.`
-    : "";
-  setStatus(
-    `GPS verbunden · Tour läuft${discoveryMessage}${xpMessage}`,
-  );
+
+  if (!result.record) {
+    setStatus(trackingStatus(
+      result.accuracy > window.locationFilterSettings.maxRecordAccuracy
+        ? " · zu ungenau zum Freischalten"
+        : lastStatusDetail,
+    ));
+    return;
+  }
+
+  try {
+    const { areaWasUnlocked, explorationResult } = recordArea(result.record, result.accuracy, fix.timestamp);
+    const details = [];
+    if (areaWasUnlocked) details.push("Neues Gebiet");
+    if (explorationResult.status === "new") details.push(`+${explorationResult.xpAwarded} XP`);
+    lastStatusDetail = details.length ? ` · ${details.join(" · ")}` : "";
+    updateStatistics();
+    setStatus(trackingStatus(lastStatusDetail));
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      error?.name === "QuotaExceededError"
+        ? "Speicher voll · Gebiet nicht gespeichert"
+        : "Gebiet konnte nicht gespeichert werden.",
+    );
+  }
 }
 
 function showLocationError(error) {
   const errorMessages = {
-    1: "Standortfreigabe wurde verweigert.",
+    1: "Standortfreigabe wurde verweigert. Bitte in den Einstellungen erlauben.",
     2: "GPS-Standort ist momentan nicht verfügbar.",
-    3: "Die GPS-Anfrage hat zu lange gedauert.",
+    3: "GPS antwortet nicht · suche weiter …",
   };
 
+  if (error.fatal) {
+    stopTracking().then(() => setStatus(errorMessages[error.code] || "GPS-Fehler"));
+    return;
+  }
   setStatus(errorMessages[error.code] || "GPS-Fehler");
 }
 
-function startTracking() {
+function resetTourState() {
+  if (tourTimerId !== null) {
+    window.clearInterval(tourTimerId);
+  }
+  tourTimerId = null;
+  tourStartedAt = null;
+  hasLocation = false;
+  lastStatusDetail = "";
+  locationFilter.reset();
+  startButton.disabled = false;
+  stopButton.disabled = true;
+}
+
+async function startTracking() {
   if (!gpsService) {
     gpsService = new window.GpsService({
       onLocation: updateLocation,
@@ -336,76 +259,60 @@ function startTracking() {
     return;
   }
 
-  setStatus("GPS wird gesucht");
+  locationFilter.reset();
+  hasLocation = false;
+  lastStatusDetail = "";
+  setStatus("GPS wird gesucht …");
   tourStartedAt = Date.now();
   centerOnNextLocation = true;
   updateTourDuration();
   tourTimerId = window.setInterval(updateTourDuration, 1000);
   startButton.disabled = true;
   stopButton.disabled = false;
-  gpsService
-    .start(sampleIntervals[travelMode])
-    .catch((error) => {
-      console.error(error);
-      stopTracking();
-      setStatus(error.message || "GPS konnte nicht gestartet werden");
-    });
+
+  try {
+    await gpsService.start();
+  } catch (error) {
+    console.error(error);
+    await gpsService.stop().catch(() => {});
+    resetTourState();
+    updateTourDuration();
+    setStatus(error.message || "GPS konnte nicht gestartet werden");
+  }
 }
 
 async function stopTracking() {
-  if (!gpsService || !gpsService.isActive()) {
-    setStatus("Tour wurde gestoppt");
-    return;
+  if (gpsService) {
+    try {
+      await gpsService.stop();
+    } catch (error) {
+      console.error(error);
+    }
   }
-
-  try {
-    await gpsService.stop();
-  } catch (error) {
-    console.error(error);
-    setStatus("GPS konnte nicht beendet werden");
-  }
-
-  if (tourTimerId !== null) {
-    window.clearInterval(tourTimerId);
-  }
-  tourTimerId = null;
-  tourStartedAt = null;
-  lastPosition = null;
-  smoothedPosition = null;
-  lastSampleTime = null;
-  startButton.disabled = false;
-  stopButton.disabled = true;
+  resetTourState();
+  updateTourDuration();
   setStatus("Tour wurde gestoppt");
 }
 
 function clearLocationMarker() {
-  if (locationMarker) {
-    window.worldMap.removeLayer(locationMarker);
-    locationMarker = null;
-  }
   window.clearLocationAvatar();
 }
 
-travelModeButtons.forEach((button) => button.addEventListener("click", () => {
-  travelMode = button.dataset.mode;
-  travelModeButtons.forEach((modeButton) => {
-    const isSelected = modeButton === button;
-    modeButton.classList.toggle("is-selected", isSelected);
-    modeButton.setAttribute("aria-pressed", String(isSelected));
+// Die Fortbewegungsart wird aus der Geschwindigkeit erkannt.
+// Die Knöpfe zeigen nur an, was gerade erkannt wurde.
+travelModeButtons.forEach((button) => {
+  button.title = "Wird automatisch erkannt";
+  button.addEventListener("click", () => {
+    setStatus(
+      gpsService?.isActive()
+        ? trackingStatus(" · wird automatisch erkannt")
+        : "Fortbewegung wird während der Tour automatisch erkannt",
+    );
   });
-  if (gpsService && gpsService.isActive()) {
-    stopTracking().then(startTracking);
-    return;
-  }
-  setStatus(
-    `Bereit · Messung alle ${sampleIntervals[travelMode] / 1000} Sekunden`,
-  );
-}));
+});
 
 document.addEventListener("worldunlock:avatar-selected", (event) => {
-  if (locationMarker) {
-    window.updateLocationAvatar(locationMarker.getLatLng(), event.detail);
-  }
+  window.updateLocationAvatar(null, event.detail);
 });
 startButton.addEventListener("click", startTracking);
 stopButton.addEventListener("click", stopTracking);
@@ -418,8 +325,7 @@ try {
   window.loadDiscoveredAreas();
   updateStatistics();
   setStatus("Bereit");
-  enrichExistingAreas();
-  enrichExistingMunicipalityBoundaries();
+  enrichExistingAreas().then(enrichExistingMunicipalityBoundaries);
 } catch (error) {
   console.error(error);
   setStatus("Gespeicherte Gebiete konnten nicht geladen werden.");

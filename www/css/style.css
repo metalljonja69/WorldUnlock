@@ -42,6 +42,19 @@ button:focus-visible, select:focus-visible, .import-button:focus-visible {
   padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem calc(5.75rem + env(safe-area-inset-bottom));
 }
 
+/* Deckt die Statusleiste ab, damit gescrollter Inhalt nicht unter Uhrzeit und Akku liegt. */
+.app-shell::before {
+  content: "";
+  position: fixed;
+  z-index: 800;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--bg);
+  pointer-events: none;
+}
+
 .app-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

@@ -1,4 +1,6 @@
-const cacheName = 'worldunlocked-v11';
+// Netzwerk zuerst, Cache nur als Offline-Rückfall. So kommen neue
+// Versionen sofort an, ohne dass der Cache-Name erhöht werden muss.
+const cacheName = 'worldunlocked-v12';
 const localFiles = [
   './',
   './index.html',
@@ -10,6 +12,16 @@ const localFiles = [
   './js/storage.js',
   './js/services/exploration-engine.js',
   './js/services/gps-service.js',
+  './js/services/location-filter.js',
+  './js/services/place-service.js',
+  './js/ui/achievements.js',
+  './js/ui/avatars.js',
+  './js/ui/dashboard.js',
+  './js/ui/navigation.js',
+  './js/ui/profile.js',
+  './js/ui/settings.js',
+  './js/ui/statistics.js',
+  './js/ui/world.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/images/layers.png',
@@ -42,13 +54,23 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') {
+  const request = event.request;
+  // Nur eigene Dateien; Karten-Kacheln und APIs gehen direkt ans Netz.
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => (
-      cachedResponse || fetch(event.request)
-    ))
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(cacheName).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cachedResponse) => (
+        cachedResponse || Response.error()
+      )))
   );
 });

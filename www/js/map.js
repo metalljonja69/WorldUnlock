@@ -49,20 +49,37 @@ function getAreaEndpoints(area) {
   return [[area.latitude, area.longitude]];
 }
 
+let fogFrameRequested = false;
+
+// Beim Verschieben feuern sehr viele Events: höchstens einmal pro Frame zeichnen.
+function scheduleFogDraw() {
+  if (fogFrameRequested) return;
+  fogFrameRequested = true;
+  window.requestAnimationFrame(() => {
+    fogFrameRequested = false;
+    drawFogOfWar();
+  });
+}
+
 function drawFogOfWar() {
   const size = map.getSize();
   const layerOrigin = map.containerPointToLayerPoint(L.point(0, 0));
   const layerEnd = map.containerPointToLayerPoint(L.point(size.x, size.y));
   const layerSize = layerEnd.subtract(layerOrigin);
   const pixelRatio = window.devicePixelRatio || 1;
-  fogCanvas.width = layerSize.x * pixelRatio;
-  fogCanvas.height = layerSize.y * pixelRatio;
+  const canvasWidth = Math.round(layerSize.x * pixelRatio);
+  const canvasHeight = Math.round(layerSize.y * pixelRatio);
+  if (fogCanvas.width !== canvasWidth || fogCanvas.height !== canvasHeight) {
+    fogCanvas.width = canvasWidth;
+    fogCanvas.height = canvasHeight;
+  }
   fogCanvas.style.left = `${layerOrigin.x}px`;
   fogCanvas.style.top = `${layerOrigin.y}px`;
   fogCanvas.style.width = `${layerSize.x}px`;
   fogCanvas.style.height = `${layerSize.y}px`;
   fogContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   fogContext.globalCompositeOperation = "source-over";
+  fogContext.clearRect(0, 0, size.x, size.y);
   fogContext.fillStyle = "rgba(8, 20, 27, 0.9)";
   fogContext.fillRect(0, 0, size.x, size.y);
   fogContext.globalCompositeOperation = "destination-out";
@@ -84,6 +101,15 @@ function drawFogOfWar() {
       .distanceTo(
         map.latLngToLayerPoint(endpointCoordinates[0]),
       );
+
+    // Gebiete ausserhalb des sichtbaren Bereichs überspringen.
+    const minX = Math.min(...endpoints.map((point) => point.x)) - radiusInPixels;
+    const maxX = Math.max(...endpoints.map((point) => point.x)) + radiusInPixels;
+    const minY = Math.min(...endpoints.map((point) => point.y)) - radiusInPixels;
+    const maxY = Math.max(...endpoints.map((point) => point.y)) + radiusInPixels;
+    if (maxX < 0 || maxY < 0 || minX > size.x || minY > size.y) {
+      return;
+    }
 
     fogContext.beginPath();
     fogContext.shadowBlur = 2;
@@ -113,7 +139,7 @@ function drawFogOfWar() {
 
 window.addFogArea = (area) => {
   discoveredFogAreas.push(area);
-  drawFogOfWar();
+  scheduleFogDraw();
 };
 
 window.registerDiscoveredAreaLayer = (layer) => {
@@ -128,7 +154,26 @@ window.clearDiscoveredAreas = () => {
   drawFogOfWar();
 };
 
+let locationAvatarId = null;
+
+function createAvatarIcon(avatar) {
+  return L.divIcon({
+    className: "location-avatar",
+    html: `<span aria-label="${avatar.label}">${avatar.svg}</span>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+// coordinates darf null sein, um nur den Avatar zu wechseln.
 window.updateLocationAvatar = (coordinates, avatar, accuracy) => {
+  if (!coordinates) {
+    if (window.locationAvatar && avatar && avatar.id !== locationAvatarId) {
+      window.locationAvatar.setIcon(createAvatarIcon(avatar));
+      locationAvatarId = avatar.id;
+    }
+    return;
+  }
   if (Number.isFinite(accuracy)) {
     if (!window.locationAccuracyCircle) {
       window.locationAccuracyCircle = L.circle(coordinates, {
@@ -146,28 +191,26 @@ window.updateLocationAvatar = (coordinates, avatar, accuracy) => {
   }
   if (!window.locationAvatar) {
     window.locationAvatar = L.marker(coordinates, {
-      icon: L.divIcon({
-        className: "location-avatar",
-        html: `<span aria-label="${avatar.label}">${avatar.svg}</span>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      }),
+      icon: createAvatarIcon(avatar),
+      interactive: false,
+      keyboard: false,
     }).addTo(map);
+    locationAvatarId = avatar.id;
     return;
   }
   window.locationAvatar.setLatLng(coordinates);
-  window.locationAvatar.setIcon(L.divIcon({
-    className: "location-avatar",
-    html: `<span aria-label="${avatar.label}">${avatar.svg}</span>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-  }));
+  // Icon nur bei Avatar-Wechsel neu erzeugen, sonst flackert es.
+  if (avatar.id !== locationAvatarId) {
+    window.locationAvatar.setIcon(createAvatarIcon(avatar));
+    locationAvatarId = avatar.id;
+  }
 };
 
 window.clearLocationAvatar = () => {
   if (window.locationAvatar) {
     map.removeLayer(window.locationAvatar);
     window.locationAvatar = null;
+    locationAvatarId = null;
   }
   if (window.locationAccuracyCircle) {
     map.removeLayer(window.locationAccuracyCircle);
@@ -175,5 +218,5 @@ window.clearLocationAvatar = () => {
   }
 };
 
-map.on("move zoom resize", drawFogOfWar);
+map.on("move zoom resize", scheduleFogDraw);
 drawFogOfWar();

@@ -2,71 +2,96 @@ const storageKey = "worldUnlockedAreas";
 const distanceStorageKey = "worldUnlockedDistance";
 const countriesStorageKey = "worldUnlockedCountries";
 const avatarStorageKey = "worldUnlockAvatar";
-const municipalityCacheStorageKey = "worldUnlockMunicipalityCache";
+// Neuer Schlüssel: Der alte Cache konnte falsche Gemeinden enthalten.
+const municipalityCacheStorageKey = "worldUnlockMunicipalityBoundaries";
+const legacyMunicipalityCacheStorageKey = "worldUnlockMunicipalityCache";
 let discoveredAreas = [];
 let travelledDistance = 0;
 let visitedCountries = [];
 let selectedAvatar = "normal";
 const coverageGridSize = 25;
+const coverageSampleStep = 12;
+const metersPerDegreeLatitude = 111320;
 const discoveredCoverageCells = new Set();
+// Abgedeckte Rasterzellen pro Land, damit Überlappungen nicht doppelt zählen.
+const coverageCellsByCountry = new Map();
+// Gemeindegrenzen werden nur hier gespeichert, nicht in jedem Gebiet.
 const municipalityCache = new Map();
+let municipalityCacheLoaded = false;
 
+const latitudeStep = coverageGridSize / metersPerDegreeLatitude;
+
+function longitudeStepForLatitudeIndex(latitudeIndex) {
+  const latitude = (latitudeIndex + 0.5) * latitudeStep;
+  return coverageGridSize /
+    (metersPerDegreeLatitude * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
+}
+
+// Festes Raster: Die Zellbreite hängt nur von der Zeile ab, nicht vom Punkt.
 function coverageCellKey(latitude, longitude) {
-  const latitudeStep = coverageGridSize / 111320;
   const latitudeIndex = Math.floor(latitude / latitudeStep);
-  const longitudeStep = coverageGridSize /
-    (111320 * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
-  return `${latitudeIndex}:${Math.floor(longitude / longitudeStep)}`;
+  const longitudeIndex = Math.floor(longitude / longitudeStepForLatitudeIndex(latitudeIndex));
+  return `${latitudeIndex}:${longitudeIndex}`;
+}
+
+function coverageCellCenter(key) {
+  const [latitudeIndex, longitudeIndex] = key.split(":").map(Number);
+  return {
+    latitude: (latitudeIndex + 0.5) * latitudeStep,
+    longitude: (longitudeIndex + 0.5) * longitudeStepForLatitudeIndex(latitudeIndex),
+  };
+}
+
+function forEachCoverageCircleCell(center, radius, callback) {
+  for (let latitudeOffset = -radius; latitudeOffset <= radius; latitudeOffset += coverageSampleStep) {
+    const latitude = center.latitude + latitudeOffset / metersPerDegreeLatitude;
+    const metersPerDegreeLongitude =
+      metersPerDegreeLatitude * Math.max(0.1, Math.cos((latitude * Math.PI) / 180));
+    for (let longitudeOffset = -radius; longitudeOffset <= radius; longitudeOffset += coverageSampleStep) {
+      if (latitudeOffset ** 2 + longitudeOffset ** 2 > radius ** 2) continue;
+      callback(coverageCellKey(latitude, center.longitude + longitudeOffset / metersPerDegreeLongitude));
+    }
+  }
+}
+
+function forEachCoverageCell(area, callback) {
+  if (Number.isFinite(area.startLatitude) && Number.isFinite(area.startLongitude)) {
+    const start = { latitude: area.startLatitude, longitude: area.startLongitude };
+    const end = { latitude: area.latitude, longitude: area.longitude };
+    const steps = Math.max(1, Math.ceil(calculateDistance(start, end) / 10));
+    for (let step = 0; step <= steps; step += 1) {
+      const fraction = step / steps;
+      forEachCoverageCircleCell({
+        latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+        longitude: start.longitude + (end.longitude - start.longitude) * fraction,
+      }, area.radius, callback);
+    }
+    return;
+  }
+  forEachCoverageCircleCell(area, area.radius, callback);
+}
+
+function getCountryCells(countryCode) {
+  if (!coverageCellsByCountry.has(countryCode)) {
+    coverageCellsByCountry.set(countryCode, new Set());
+  }
+  return coverageCellsByCountry.get(countryCode);
 }
 
 function registerCoverageArea(area) {
-  let addedCoverage = false;
-  const endpoints = Number.isFinite(area.startLatitude)
-    ? [
-        { latitude: area.startLatitude, longitude: area.startLongitude },
-        { latitude: area.latitude, longitude: area.longitude },
-      ]
-    : [{ latitude: area.latitude, longitude: area.longitude }];
-
-  for (let segmentIndex = 0; segmentIndex < endpoints.length - 1; segmentIndex += 1) {
-    const start = endpoints[segmentIndex];
-    const end = endpoints[segmentIndex + 1];
-    const segmentDistance = calculateDistance(start, end);
-    const steps = Math.max(1, Math.ceil(segmentDistance / 10));
-    for (let step = 0; step <= steps; step += 1) {
-      const fraction = step / steps;
-      addedCoverage = addCoverageCircle({
-        latitude: start.latitude + (end.latitude - start.latitude) * fraction,
-        longitude: start.longitude + (end.longitude - start.longitude) * fraction,
-      }, area.radius) || addedCoverage;
-    }
-  }
-  if (endpoints.length === 1) {
-    addedCoverage = addCoverageCircle(endpoints[0], area.radius) || addedCoverage;
-  }
-  return addedCoverage;
+  const countryCells = area.countryCode ? getCountryCells(area.countryCode) : null;
+  forEachCoverageCell(area, (key) => {
+    discoveredCoverageCells.add(key);
+    if (countryCells) countryCells.add(key);
+  });
 }
 
-function addCoverageCircle(center, radius) {
-  let addedCoverage = false;
-  const latitudeStep = radius / 111320;
-  const longitudeStep = radius /
-    (111320 * Math.max(0.1, Math.cos((center.latitude * Math.PI) / 180)));
-  for (let latitudeOffset = -radius; latitudeOffset <= radius; latitudeOffset += 12) {
-    const latitude = center.latitude + latitudeOffset / 111320;
-    for (let longitudeOffset = -radius; longitudeOffset <= radius; longitudeOffset += 12) {
-      if (latitudeOffset ** 2 + longitudeOffset ** 2 > radius ** 2) continue;
-      const longitude = center.longitude +
-        longitudeOffset /
-        (111320 * Math.max(0.1, Math.cos((latitude * Math.PI) / 180)));
-      const cellKey = coverageCellKey(latitude, longitude);
-      if (!discoveredCoverageCells.has(cellKey)) {
-        discoveredCoverageCells.add(cellKey);
-        addedCoverage = true;
-      }
-    }
-  }
-  return addedCoverage;
+function findNewCoverageCells(area) {
+  const newCells = new Set();
+  forEachCoverageCell(area, (key) => {
+    if (!discoveredCoverageCells.has(key)) newCells.add(key);
+  });
+  return newCells;
 }
 
 const avatarDefinitions = [
@@ -101,10 +126,6 @@ function getUnlockedAvatars() {
   return avatarDefinitions.filter((avatar) => avatar.requiredDistance <= travelledDistance);
 }
 
-function getTotalDiscoveredArea() {
-  return discoveredAreas.reduce((total, area) => total + getAreaSize(area), 0);
-}
-
 function getAvatarDefinitions() {
   return avatarDefinitions.map((avatar) => ({
     ...avatar,
@@ -128,31 +149,76 @@ function setSelectedAvatar(avatarId) {
   localStorage.setItem(avatarStorageKey, selectedAvatar);
 }
 
-function getMunicipalityProgress() {
-  const progressByMunicipality = new Map();
-  discoveredAreas.forEach((area) => {
-    if (!area.municipality) {
-      return;
-    }
-    const current = progressByMunicipality.get(area.municipality) || {
-      name: area.municipality,
-      unlockedArea: 0,
-      municipalityArea: area.municipalityArea,
-      municipalityPolygon: area.municipalityPolygon,
-    };
-    if (area.municipalityArea) current.municipalityArea = area.municipalityArea;
-    if (area.municipalityPolygon) current.municipalityPolygon = area.municipalityPolygon;
-    progressByMunicipality.set(area.municipality, current);
+function municipalityCacheKey(name) {
+  return name.trim().toLocaleLowerCase("de");
+}
+
+function loadMunicipalityCache() {
+  if (municipalityCacheLoaded) return;
+  municipalityCacheLoaded = true;
+  localStorage.removeItem(legacyMunicipalityCacheStorageKey);
+  const savedCache = localStorage.getItem(municipalityCacheStorageKey);
+  if (!savedCache) return;
+  try {
+    const parsedCache = JSON.parse(savedCache);
+    Object.entries(parsedCache || {}).forEach(([key, value]) => {
+      if (value?.polygon?.rings?.length) municipalityCache.set(key, value);
+    });
+  } catch (error) {
+    console.warn("Gemeindegrenzen-Cache ist ungültig.", error);
+  }
+}
+
+function saveMunicipalityCache() {
+  const cacheObject = {};
+  municipalityCache.forEach((value, key) => {
+    if (value?.polygon) cacheObject[key] = value;
   });
-  return [...progressByMunicipality.values()].map((municipality) => {
-    const coveredArea = municipality.municipalityPolygon
-      ? calculateMunicipalityCoverage(municipality.municipalityPolygon)
+  try {
+    localStorage.setItem(municipalityCacheStorageKey, JSON.stringify(cacheObject));
+  } catch (error) {
+    console.warn("Gemeindegrenzen konnten nicht gespeichert werden.", error);
+  }
+}
+
+function getCachedMunicipality(name) {
+  if (!name) return null;
+  loadMunicipalityCache();
+  return municipalityCache.get(municipalityCacheKey(name)) || null;
+}
+
+function getRingsBounds(rings) {
+  let minLatitude = Infinity;
+  let maxLatitude = -Infinity;
+  let minLongitude = Infinity;
+  let maxLongitude = -Infinity;
+  rings.forEach((ring) => ring.forEach(([longitude, latitude]) => {
+    minLatitude = Math.min(minLatitude, latitude);
+    maxLatitude = Math.max(maxLatitude, latitude);
+    minLongitude = Math.min(minLongitude, longitude);
+    maxLongitude = Math.max(maxLongitude, longitude);
+  }));
+  return { minLatitude, maxLatitude, minLongitude, maxLongitude };
+}
+
+function getMunicipalityProgress() {
+  const names = new Map();
+  discoveredAreas.forEach((area) => {
+    if (area.municipality && !names.has(municipalityCacheKey(area.municipality))) {
+      names.set(municipalityCacheKey(area.municipality), area.municipality);
+    }
+  });
+  return [...names.values()].map((name) => {
+    const municipality = getCachedMunicipality(name);
+    const coveredArea = municipality?.polygon
+      ? calculateMunicipalityCoverage(municipality.polygon)
       : 0;
     return {
-      ...municipality,
+      name,
       unlockedArea: coveredArea,
-      percentage: municipality.municipalityArea > 0
-        ? Math.min(100, (coveredArea / municipality.municipalityArea) * 100)
+      municipalityArea: municipality?.area,
+      percentage: municipality?.area > 0
+        ? Math.min(100, (coveredArea / municipality.area) * 100)
         : 0,
     };
   });
@@ -176,26 +242,25 @@ function pointInPolygon(latitude, longitude, rings) {
     return inside;
   };
   if (!rings?.length) return false;
-  if (!insideRing(rings[0])) return false;
-  return !rings.slice(1).some(insideRing);
-}
-
-function coverageCellCenter(key) {
-  return key.split(":").map(Number);
+  // ESRI-Polygone: Ringe im Uhrzeigersinn sind Aussenringe, sonst Löcher.
+  // Ein Punkt zählt, wenn er in einer ungeraden Anzahl Ringe liegt.
+  return rings.filter(insideRing).length % 2 === 1;
 }
 
 function calculateMunicipalityCoverage(polygon) {
-  let count = 0;
   const rings = polygon.rings || [];
   if (!rings.length) return 0;
+  const bounds = getRingsBounds(rings);
+  let count = 0;
   for (const key of discoveredCoverageCells) {
-    const [latitudeIndex, longitudeIndex] = key.split(":").map(Number);
-    const latitudeStep = coverageGridSize / 111320;
-    const approximateLatitude = (latitudeIndex + 0.5) * latitudeStep;
-    const longitudeStep = coverageGridSize /
-      (111320 * Math.max(0.1, Math.cos((approximateLatitude * Math.PI) / 180)));
-    const approximateLongitude = (longitudeIndex + 0.5) * longitudeStep;
-    if (pointInPolygon(approximateLatitude, approximateLongitude, rings)) {
+    const center = coverageCellCenter(key);
+    if (
+      center.latitude < bounds.minLatitude || center.latitude > bounds.maxLatitude ||
+      center.longitude < bounds.minLongitude || center.longitude > bounds.maxLongitude
+    ) {
+      continue;
+    }
+    if (pointInPolygon(center.latitude, center.longitude, rings)) {
       count += 1;
     }
   }
@@ -208,6 +273,8 @@ function drawDiscoveredArea(area) {
 
 function isValidArea(area) {
   return (
+    area !== null &&
+    typeof area === "object" &&
     Number.isFinite(area.latitude) &&
     Number.isFinite(area.longitude) &&
     Number.isFinite(area.radius) &&
@@ -224,56 +291,64 @@ function isValidArea(area) {
   );
 }
 
-function updateAreaCountry(position, country) {
-  const area = discoveredAreas.find(
-    (savedArea) =>
-      calculateDistance(savedArea, position) <= savedArea.radius,
-  );
-
-  if (!area) {
-    throw new Error("Das erkundete Gebiet konnte keinem Land zugeordnet werden.");
-  }
-
-  area.countryName = country.name;
-  area.countryCode = country.code;
-  area.countryArea = country.area;
-  if (country.municipality) {
-    area.municipality = country.municipality;
-  }
-  if (country.municipalityArea) area.municipalityArea = country.municipalityArea;
-  if (country.municipalityPolygon) area.municipalityPolygon = country.municipalityPolygon;
+function persistAreas() {
   localStorage.setItem(storageKey, JSON.stringify(discoveredAreas));
+}
+
+// Ordnet einem gespeicherten Gebiet Land und Gemeinde zu.
+// `area` ist das Objekt, das saveDiscoveredArea zurückgegeben hat.
+function updateAreaCountry(area, place) {
+  const target = discoveredAreas.includes(area)
+    ? area
+    : discoveredAreas.find(
+      (savedArea) =>
+        savedArea.latitude === area.latitude && savedArea.longitude === area.longitude,
+    );
+
+  if (!target) {
+    return false;
+  }
+
+  target.countryName = place.name;
+  target.countryCode = place.code;
+  target.countryArea = place.area;
+  if (place.municipality) {
+    target.municipality = place.municipality;
+  }
+  const countryCells = getCountryCells(target.countryCode);
+  forEachCoverageCell(target, (key) => countryCells.add(key));
+  persistAreas();
+  return true;
 }
 
 function getAreasWithoutCountry() {
-  return discoveredAreas
-    .filter((area) => !area.countryName)
-    .map((area) => ({
-      latitude: area.latitude,
-      longitude: area.longitude,
-    }));
+  return discoveredAreas.filter((area) => !area.countryName);
 }
 
 function getMunicipalitiesWithoutBoundary() {
-  return [...new Set(
-    discoveredAreas
-      .filter((area) => area.municipality && !area.municipalityPolygon)
-      .map((area) => area.municipality),
-  )];
+  loadMunicipalityCache();
+  const missing = new Map();
+  discoveredAreas.forEach((area) => {
+    if (
+      area.municipality &&
+      (!area.countryCode || area.countryCode === "CH") &&
+      !municipalityCache.has(municipalityCacheKey(area.municipality))
+    ) {
+      missing.set(municipalityCacheKey(area.municipality), area.municipality);
+    }
+  });
+  return [...missing.values()];
 }
 
 function addMunicipalityBoundary(municipalityName, boundary) {
-  if (!boundary) return;
-  discoveredAreas.forEach((area) => {
-    if (area.municipality === municipalityName) {
-      area.municipalityArea = boundary.area;
-      area.municipalityPolygon = boundary.polygon;
-    }
-  });
-  localStorage.setItem(storageKey, JSON.stringify(discoveredAreas));
+  if (!boundary?.polygon) return;
+  loadMunicipalityCache();
+  municipalityCache.set(municipalityCacheKey(municipalityName), boundary);
+  saveMunicipalityCache();
 }
 
 function loadDiscoveredAreas() {
+  loadMunicipalityCache();
   const savedAreas = localStorage.getItem(storageKey);
 
   if (savedAreas) {
@@ -283,11 +358,27 @@ function loadDiscoveredAreas() {
       throw new Error("Gespeicherte Gebiete haben ein ungültiges Format.");
     }
 
+    // Alte Versionen speicherten die Gemeindegrenze in jedem Gebiet.
+    // Das füllt den Speicher und konnte falsch sein: entfernen, die
+    // Grenzen werden einmal pro Gemeinde neu geladen.
+    let migrated = false;
+    parsedAreas.forEach((area) => {
+      if ("municipalityPolygon" in area || "municipalityArea" in area) {
+        delete area.municipalityPolygon;
+        delete area.municipalityArea;
+        migrated = true;
+      }
+    });
+
     discoveredAreas = parsedAreas;
     discoveredAreas.forEach((area) => {
       registerCoverageArea(area);
       drawDiscoveredArea(area);
     });
+
+    if (migrated) {
+      persistAreas();
+    }
   }
 
   const savedDistance = localStorage.getItem(distanceStorageKey);
@@ -323,15 +414,23 @@ function loadDiscoveredAreas() {
   }
 }
 
+// Speichert ein Gebiet, wenn es neue Fläche aufdeckt.
+// Gibt das gespeicherte Gebiet zurück, sonst null.
 function saveDiscoveredArea(area) {
-  const addedCoverage = registerCoverageArea(area);
-  if (!addedCoverage) {
-    return false;
+  const newCells = findNewCoverageCells(area);
+  if (!newCells.size) {
+    return null;
   }
   discoveredAreas.push(area);
-  localStorage.setItem(storageKey, JSON.stringify(discoveredAreas));
+  try {
+    persistAreas();
+  } catch (error) {
+    discoveredAreas.pop();
+    throw error;
+  }
+  newCells.forEach((key) => discoveredCoverageCells.add(key));
   drawDiscoveredArea(area);
-  return true;
+  return area;
 }
 
 function clearStoredData() {
@@ -347,23 +446,16 @@ function clearStoredData() {
   visitedCountries = [];
   selectedAvatar = "normal";
   discoveredCoverageCells.clear();
+  coverageCellsByCountry.clear();
   window.clearDiscoveredAreas();
 }
 
-async function lookupMunicipalityBoundary(municipalityName) {
+// Grenzen gibt es nur für Schweizer Gemeinden (swisstopo).
+async function lookupMunicipalityBoundary(municipalityName, countryCode) {
   if (!municipalityName) return null;
-  const cacheKey = municipalityName.toLocaleLowerCase("de");
-  if (municipalityCache.has(cacheKey)) return municipalityCache.get(cacheKey);
-
-  const savedCache = localStorage.getItem(municipalityCacheStorageKey);
-  if (savedCache) {
-    try {
-      const parsedCache = JSON.parse(savedCache);
-      if (parsedCache?.[cacheKey]) municipalityCache.set(cacheKey, parsedCache[cacheKey]);
-    } catch (error) {
-      console.warn("Gemeindegrenzen-Cache ist ungültig.", error);
-    }
-  }
+  if (countryCode && countryCode !== "CH") return null;
+  loadMunicipalityCache();
+  const cacheKey = municipalityCacheKey(municipalityName);
   if (municipalityCache.has(cacheKey)) return municipalityCache.get(cacheKey);
 
   const url =
@@ -378,23 +470,32 @@ async function lookupMunicipalityBoundary(municipalityName) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Gemeindegrenze konnte nicht geladen werden: ${response.status}`);
   const data = await response.json();
-  const feature = data.results?.find((candidate) =>
-    candidate.attributes?.gemname === municipalityName ||
+  const matches = (data.results || []).filter((candidate) =>
+    typeof candidate.attributes?.gemname === "string" &&
+    municipalityCacheKey(candidate.attributes.gemname) === cacheKey &&
     candidate.geometry?.rings?.length,
   );
-  if (!feature?.geometry?.rings?.length) return null;
+  // swisstopo liefert jeden Jahrgang seit 1850. Nur den aktuellen Stand
+  // verwenden, sonst stimmen Grenze und Fläche nicht (z. B. Zürich 1850).
+  const feature =
+    matches.find((candidate) => candidate.attributes.is_current_jahr === true) ||
+    matches.sort((first, second) => (second.attributes.jahr || 0) - (first.attributes.jahr || 0))[0];
+  if (!feature) {
+    // Nicht erneut nachfragen, solange die App läuft.
+    municipalityCache.set(cacheKey, null);
+    return null;
+  }
 
   const municipality = {
     name: municipalityName,
-    polygon: feature.geometry,
+    polygon: { rings: feature.geometry.rings },
     area:
       Number.isFinite(feature.attributes?.gemflaeche)
         ? feature.attributes.gemflaeche * 10000
         : null,
   };
   municipalityCache.set(cacheKey, municipality);
-  const cacheObject = Object.fromEntries(municipalityCache.entries());
-  localStorage.setItem(municipalityCacheStorageKey, JSON.stringify(cacheObject));
+  saveMunicipalityCache();
   return municipality;
 }
 
@@ -419,7 +520,7 @@ function exportStoredData() {
   link.href = url;
   link.download = `worldunlock-backup-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function importStoredData(file) {
@@ -467,43 +568,20 @@ function addVisitedCountry(country) {
   return true;
 }
 
-function getAreaSize(area) {
-  if (Number.isFinite(area.startLatitude)) {
-    return (
-      calculateDistance(
-        {
-          latitude: area.startLatitude,
-          longitude: area.startLongitude,
-        },
-        area,
-      ) *
-        area.radius *
-        2 +
-      Math.PI * area.radius ** 2
-    );
-  }
-
-  return Math.PI * area.radius ** 2;
-}
-
 function getStatistics() {
-  const progressByCountry = new Map();
-
+  const countryInfo = new Map();
   discoveredAreas.forEach((area) => {
-    if (!area.countryName || !area.countryArea) {
+    if (!area.countryCode || !area.countryArea || countryInfo.has(area.countryCode)) {
       return;
     }
-
-    const countryKey = area.countryCode || area.countryName;
-    const currentProgress = progressByCountry.get(countryKey) || {
+    countryInfo.set(area.countryCode, {
       name: area.countryName,
-      code: area.countryCode || countryKey,
-      unlockedArea: 0,
+      code: area.countryCode,
       countryArea: area.countryArea,
-    };
-    currentProgress.unlockedArea += getAreaSize(area);
-    progressByCountry.set(countryKey, currentProgress);
+    });
   });
+
+  const cellArea = coverageGridSize * coverageGridSize;
 
   return {
     distance: travelledDistance,
@@ -520,15 +598,16 @@ function getStatistics() {
           percentage: 0,
         },
     countries: [...visitedCountries],
-    countryProgress: [...progressByCountry.values()].map((country) => ({
-      ...country,
-      percentage: Math.min(
-        100,
-        (country.unlockedArea / (country.countryArea * 1000000)) * 100,
-      ),
-    })),
+    countryProgress: [...countryInfo.values()].map((country) => {
+      const unlockedArea = (coverageCellsByCountry.get(country.code)?.size || 0) * cellArea;
+      return {
+        ...country,
+        unlockedArea,
+        percentage: Math.min(100, (unlockedArea / (country.countryArea * 1000000)) * 100),
+      };
+    }),
     municipalities: getMunicipalityProgress(),
-    totalArea: getTotalDiscoveredArea(),
+    totalArea: discoveredCoverageCells.size * cellArea,
   };
 }
 
