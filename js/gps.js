@@ -14,6 +14,12 @@ const tourDuration = document.querySelector("#tour-duration");
 const travelModeButtons = document.querySelectorAll(".mode-button");
 const headerLevelProgressBar = document.querySelector("#header-level-progress-bar");
 
+// Bei jeder Änderung erhöhen: In den Einstellungen sieht man so,
+// ob das Gerät die neue Version geladen hat.
+const appVersion = "1.1.2";
+const appVersionElement = document.querySelector("#app-version");
+if (appVersionElement) appVersionElement.textContent = `Version ${appVersion}`;
+
 const discoveryRadius = 100;
 const travelModeLabels = { walking: "zu Fuss", vehicle: "Fahrzeug" };
 

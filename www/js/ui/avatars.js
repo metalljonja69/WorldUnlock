@@ -15,6 +15,9 @@
     document.querySelector("#dashboard-avatar").innerHTML = selected.svg;
     document.querySelector("#dashboard-avatar-name").textContent = selected.label;
     document.querySelector("#profile-avatar").innerHTML = selected.svg;
+    // Kopfzeile oben zeigt immer den gewählten Avatar.
+    const headerAvatar = document.querySelector("#header-avatar");
+    if (headerAvatar) headerAvatar.innerHTML = selected.svg;
 
     const grid = document.querySelector("#avatar-grid");
     grid.replaceChildren(...definitions.map((avatar) => {

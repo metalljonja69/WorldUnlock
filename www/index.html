@@ -26,7 +26,7 @@
         </div>
 
         <button class="player-summary" type="button" data-menu-tab="profile" aria-label="Profil öffnen">
-          <span class="player-avatar" aria-hidden="true">
+          <span id="header-avatar" class="player-avatar" aria-hidden="true">
             <svg viewBox="0 0 16 20"><path fill="#f3c7a6" d="M5 2h6v5H5z"/><path fill="#3155a4" d="M4 7h8v8H4z"/><path fill="#252b45" d="M5 15h2v5H5zm4 0h2v5H9z"/></svg>
           </span>
           <span class="player-meta">
@@ -276,6 +276,7 @@
         <label class="import-button" for="import-data-input">Daten importieren</label>
         <input id="import-data-input" type="file" accept="application/json,.json" hidden>
         <button id="clear-data-button" class="danger-button" type="button">Alle gespeicherten Daten löschen</button>
+        <p id="app-version" class="empty-state"></p>
       </section>
     </aside>
     <div id="menu-backdrop" class="menu-backdrop" hidden></div>

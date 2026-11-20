@@ -1,6 +1,6 @@
 // Netzwerk zuerst, Cache nur als Offline-Rückfall. So kommen neue
 // Versionen sofort an, ohne dass der Cache-Name erhöht werden muss.
-const cacheName = 'worldunlocked-v12';
+const cacheName = 'worldunlocked-v13';
 const localFiles = [
   './',
   './index.html',
@@ -60,8 +60,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // GitHub Pages erlaubt dem Browser, Dateien 10 Minuten zu cachen.
+  // Für Skripte, Styles und Bilder fragt 'no-cache' jedes Mal kurz beim
+  // Server nach (meist nur 304), damit nie eine alte Version läuft.
+  // Seiten-Navigationen bleiben unverändert (Weiterleitungen, Pfade).
+  const networkRequest = request.mode === 'navigate'
+    ? request
+    : new Request(request.url, { cache: 'no-cache', credentials: 'same-origin' });
+
   event.respondWith(
-    fetch(request)
+    fetch(networkRequest)
       .then((response) => {
         if (response.ok) {
           const copy = response.clone();
