@@ -122,14 +122,43 @@ function calculateDistance(firstArea, secondArea) {
   );
 }
 
+// Versteckter Schalter pro Gerät: Link mit ?avatare=alle schaltet alle
+// Avatare frei, ?avatare=normal wieder aus. Die Distanz bleibt echt.
+const unlockAllAvatarsStorageKey = "worldUnlockAllAvatars";
+
+function applyAvatarUnlockFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const value = url.searchParams.get("avatare");
+    if (value === null) return;
+    if (value === "alle") {
+      localStorage.setItem(unlockAllAvatarsStorageKey, "1");
+    } else if (value === "normal") {
+      localStorage.removeItem(unlockAllAvatarsStorageKey);
+    }
+    url.searchParams.delete("avatare");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  } catch (error) {
+    console.warn("Avatar-Schalter konnte nicht gelesen werden.", error);
+  }
+}
+applyAvatarUnlockFromUrl();
+
+function isAvatarUnlocked(avatar) {
+  return (
+    localStorage.getItem(unlockAllAvatarsStorageKey) === "1" ||
+    avatar.requiredDistance <= travelledDistance
+  );
+}
+
 function getUnlockedAvatars() {
-  return avatarDefinitions.filter((avatar) => avatar.requiredDistance <= travelledDistance);
+  return avatarDefinitions.filter(isAvatarUnlocked);
 }
 
 function getAvatarDefinitions() {
   return avatarDefinitions.map((avatar) => ({
     ...avatar,
-    unlocked: avatar.requiredDistance <= travelledDistance,
+    unlocked: isAvatarUnlocked(avatar),
   }));
 }
 
