@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>WorldUnlock</title>
-    <meta name="theme-color" content="#08111f" />
+    <meta name="theme-color" content="#0b0f14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="WorldUnlock" />
+    <link rel="apple-touch-icon" href="assets/icon-192.png" />
     <link rel="stylesheet" href="css/style.css" />
     <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
@@ -19,10 +24,7 @@
               <path d="M16 3v26M3 16h26M7 8c5 3 13 3 18 0M7 24c5-3 13-3 18 0"></path>
             </svg>
           </span>
-          <span>
-            <strong>WorldUnlock</strong>
-            <small>Explore your world</small>
-          </span>
+          <strong>WorldUnlock</strong>
         </div>
 
         <button class="player-summary" type="button" data-menu-tab="profile" aria-label="Profil öffnen">
@@ -135,9 +137,11 @@
       <div class="side-menu-header">
         <div>
           <p class="eyebrow">WorldUnlock</p>
-          <h2>Expedition-Menü</h2>
+          <h2>Menü</h2>
         </div>
-        <button id="close-menu-button" class="close-button" type="button" aria-label="Menü schließen">×</button>
+        <button id="close-menu-button" class="close-button" type="button" aria-label="Menü schliessen">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"></path></svg>
+        </button>
       </div>
 
       <nav class="menu-navigation" aria-label="Menübereiche">
@@ -159,7 +163,7 @@
         </button>
         <button class="menu-tab" type="button" data-menu-tab="settings" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.2 2.2m9.8 9.8 2.2 2.2m0-14.2-2.2 2.2M7.1 16.9l-2.2 2.2"></path></svg>
-          <span>Einstellungen</span>
+          <span>Optionen</span>
         </button>
       </nav>
 

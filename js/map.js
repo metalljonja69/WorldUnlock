@@ -178,9 +178,9 @@ window.updateLocationAvatar = (coordinates, avatar, accuracy) => {
     if (!window.locationAccuracyCircle) {
       window.locationAccuracyCircle = L.circle(coordinates, {
         radius: accuracy,
-        color: "#8edbef",
+        color: "#63e6e2",
         weight: 1,
-        fillColor: "#8edbef",
+        fillColor: "#63e6e2",
         fillOpacity: 0.12,
         interactive: false,
       }).addTo(map);

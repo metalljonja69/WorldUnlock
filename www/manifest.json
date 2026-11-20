@@ -4,8 +4,8 @@
   "description": "Entdecke die Welt Schritt für Schritt.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#101820",
-  "theme_color": "#101820",
+  "background_color": "#0b0f14",
+  "theme_color": "#0b0f14",
   "icons": [
     {
       "src": "assets/icon-192.png",

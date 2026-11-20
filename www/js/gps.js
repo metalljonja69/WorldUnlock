@@ -16,7 +16,7 @@ const headerLevelProgressBar = document.querySelector("#header-level-progress-ba
 
 // Bei jeder Änderung erhöhen: In den Einstellungen sieht man so,
 // ob das Gerät die neue Version geladen hat.
-const appVersion = "1.1.2";
+const appVersion = "1.2.0";
 const appVersionElement = document.querySelector("#app-version");
 if (appVersionElement) appVersionElement.textContent = `Version ${appVersion}`;
 
