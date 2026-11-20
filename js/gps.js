@@ -324,6 +324,10 @@ try {
   window.explorationEngine.load();
   window.loadDiscoveredAreas();
   updateStatistics();
+  // Die UI-Module (Avatare, Profil, Erfolge …) werden erst nach dieser
+  // Datei geladen und verpassen das erste Update. Nach dem Laden aller
+  // Skripte nochmals senden, damit alles von Anfang an gezeichnet ist.
+  document.addEventListener("DOMContentLoaded", updateStatistics, { once: true });
   setStatus("Bereit");
   enrichExistingAreas().then(enrichExistingMunicipalityBoundaries);
 } catch (error) {
